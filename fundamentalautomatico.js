@@ -440,7 +440,7 @@ function renderResultados(alocados, errors) {
 // ----------------------------------------------
 // Para funcionar o salvamento direto no Drive sem download, cole a URL do seu
 // Google Apps Script abaixo após publicá-lo como "Web App".
-const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaJlOBz9g2QjYfxUo5rPdffpXcDPPja6xAeIck8FiQrPWXH8ZTvTIwvh2m3Oa_2VWxWw/exec"; 
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVzUWNKZO6eaApcCNZhNfZSoSzWeDDO3awyWfBpLqs9SvaWAcDyhf4uL9kbVwj1nxZOQ/exec"; 
 
 function exportarMontadorCSV() {
     if(montadorLista.length === 0) return alert("A lista está vazia.");
