@@ -574,7 +574,7 @@ document.getElementById('import-montador').addEventListener('change', function(e
 // ==========================================
 // Para funcionar o salvamento direto no Drive sem download, cole a URL do seu
 // Google Apps Script abaixo após publicá-lo como "Web App".
-const GOOGLE_APPS_SCRIPT_URL = ""; 
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxE5S8PZ2mGsitfoWQPFEkR4soibo2chmK_cnSm-YToLZJ0iKp2sRsCgb1549bJ1X1D/exec"; 
 
 function exportarMontadorCSV() {
     if(montadorLista.length === 0) return alert("A lista está vazia.");
