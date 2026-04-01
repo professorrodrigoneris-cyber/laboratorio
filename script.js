@@ -537,57 +537,44 @@ function removerProvaSelecionada() {
     renderizarTabelaMontador();
 }
 
-// Abrir e Salvar Lista
-document.getElementById('import-montador').addEventListener('click', function(e) {
-    alert("ATENÇÃO:\nLembre-se de carregar o arquivo da seguinte pasta do Google Drive:\nhttps://drive.google.com/drive/folders/1GLat8E6H91RRW69Jn8dNbHqaoiGPa8PT?usp=sharing");
-});
-
-document.getElementById('import-montador').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (file.name.toLowerCase().endsWith('.json')) {
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            try {
-                const state = JSON.parse(evt.target.result);
-                if (state.disciplinasSelecionadas) disciplinasSelecionadas = state.disciplinasSelecionadas;
-                if (state.montadorLista) montadorLista = state.montadorLista;
-                if (state.dataInicio) document.getElementById("data-inicio").value = state.dataInicio;
-                if (state.dataFim) document.getElementById("data-fim").value = state.dataFim;
-                
-                carregarSelecaoUI();
-                if (state.dataInicio && state.dataFim) {
-                    atualizarListaDatas();
-                } else {
-                    dataDisponiveis = [];
-                    montadorLista.forEach(row => {
-                        if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
-                    });
-                    let comboData = document.getElementById("mont-data");
-                    comboData.innerHTML = "";
-                    dataDisponiveis.sort((a,b) => parseDate(a) - parseDate(b)).forEach(d => {
-                        let opt = document.createElement("option"); opt.value = opt.innerText = d; comboData.appendChild(opt);
-                    });
-                }
-                carregarTurmasMontador();
-                renderizarTabelaMontador();
-                alert("Projeto carregado com sucesso!");
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao ler o arquivo de projeto (JSON inválido).");
+function carregarProjetoFromContent(contentStr, isJson) {
+    if (isJson) {
+        try {
+            const state = JSON.parse(contentStr);
+            if (state.disciplinasSelecionadas) disciplinasSelecionadas = state.disciplinasSelecionadas;
+            if (state.montadorLista) montadorLista = state.montadorLista;
+            if (state.dataInicio) document.getElementById("data-inicio").value = state.dataInicio;
+            if (state.dataFim) document.getElementById("data-fim").value = state.dataFim;
+            
+            carregarSelecaoUI();
+            if (state.dataInicio && state.dataFim) {
+                atualizarListaDatas();
+            } else {
+                dataDisponiveis = [];
+                montadorLista.forEach(row => {
+                    if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
+                });
+                let comboData = document.getElementById("mont-data");
+                comboData.innerHTML = "";
+                dataDisponiveis.sort((a,b) => parseDate(a) - parseDate(b)).forEach(d => {
+                    let opt = document.createElement("option"); opt.value = opt.innerText = d; comboData.appendChild(opt);
+                });
             }
-        };
-        reader.readAsText(file);
+            carregarTurmasMontador();
+            renderizarTabelaMontador();
+            alert("Projeto carregado com sucesso!");
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao ler o arquivo de projeto (JSON inválido).");
+        }
     } else {
-        // Fallback para CSV antigo
-        Papa.parse(file, {
+        // Fallback for CSV
+        Papa.parse(contentStr, {
             complete: function(results) {
                 let data = results.data.filter(row => row.length >= 7);
                 if (data[0] && data[0][1] === "Data") data.shift();
                 
                 montadorLista = data.map(r => [getUniqueId(), r[1], r[2], r[3], r[4], r[5], r[6]||""]);
-                // Agg data entries
                 dataDisponiveis = [];
                 montadorLista.forEach(row => {
                     if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
@@ -600,11 +587,102 @@ document.getElementById('import-montador').addEventListener('change', function(e
                 
                 carregarTurmasMontador();
                 renderizarTabelaMontador();
-                alert("Lista carregada com sucesso.");
+                alert("Lista CSV carregada com sucesso.");
             }
         });
     }
-});
+}
+
+function handleLocalImport(file) {
+    if (!file) return;
+    let modal = document.getElementById("drive-modal");
+    if(modal) document.body.removeChild(modal);
+
+    let isJson = file.name.toLowerCase().endsWith('.json');
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        carregarProjetoFromContent(evt.target.result, isJson);
+    };
+    reader.readAsText(file);
+}
+
+function abrirModalArquivos() {
+    let modal = document.createElement("div");
+    modal.id = "drive-modal";
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center;";
+    modal.innerHTML = `
+        <div style="background:#fff; border-radius:12px; padding:20px; width:450px; max-width:90%; position:relative;">
+            <button onclick="document.body.removeChild(this.parentNode.parentNode)" style="position:absolute; top:10px; right:10px; border:none; background:transparent; font-size:20px; cursor:pointer; color:#333;">&times;</button>
+            <h3 style="margin-top:0; color:#333; font-family:Inter, sans-serif;">Abrir Projeto</h3>
+            
+            <p style="color:#555; font-size:14px;"><strong>Opção 1:</strong> Nuvem (Google Drive)</p>
+            <div id="drive-file-list" style="max-height:220px; overflow-y:auto; border:1px solid #ccc; border-radius:6px; padding:10px; margin-bottom:15px; background:#fafafa;">
+                <em style="color:#888;">Procurando projetos na sua nuvem...</em>
+            </div>
+            
+            <hr style="border:none; border-top:1px solid #eee; margin:15px 0;">
+            
+            <p style="color:#555; font-size:14px; text-align:center;">Ou abra de um arquivo local do seu Mac/PC (.json ou .csv)</p>
+            <div style="text-align:center;">
+                <label class="btn btn-secondary" style="cursor:pointer; display:inline-block; font-size:13px; padding:8px 15px; margin:0;">
+                    📁 Escolher aquivo...
+                    <input type="file" accept=".csv,.json" style="display:none;" onchange="handleLocalImport(this.files[0])">
+                </label>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    if(!GOOGLE_APPS_SCRIPT_URL) {
+        document.getElementById('drive-file-list').innerHTML = "<span style='color:#e74c3c;'>Script não configurado para listagem.</span>";
+        return;
+    }
+
+    fetch(GOOGLE_APPS_SCRIPT_URL + "?action=list")
+      .then(res => res.json())
+      .then(files => {
+          let html = "";
+          if (!files || files.length === 0) {
+              html = "<em style='color:#888;'>Nenhum projeto encontrado na pasta.</em>";
+          } else {
+              files.forEach(f => {
+                  let d = new Date(f.date);
+                  let dataStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR').substring(0,5);
+                  html += \`<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                      <div style="flex:1; overflow:hidden;">
+                          <strong style="display:block; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#333;" title="\${f.name}">\${f.name}</strong>
+                          <span style="font-size:11px; color:#888;">\${dataStr}</span>
+                      </div>
+                      <button class="btn btn-primary btn-sm" onclick="carregarDoDrive('\${f.id}', '\${f.name}')" style="margin-left:10px;">Carregar</button>
+                  </div>\`;
+              });
+          }
+          document.getElementById('drive-file-list').innerHTML = html;
+      })
+      .catch(err => {
+          document.getElementById('drive-file-list').innerHTML = "<span style='color:red;'>Erro ao carregar arquivos. Verifique se o Script do Drive (doGet) está configurado como 'Qualquer pessoa'.</span>";
+      });
+}
+
+function carregarDoDrive(fileId, fileName) {
+    let btn = event.target;
+    btn.innerText = "Aguarde...";
+    btn.disabled = true;
+
+    fetch(GOOGLE_APPS_SCRIPT_URL + "?action=get&id=" + fileId)
+    .then(res => res.text())
+    .then(content => {
+        let modal = document.getElementById("drive-modal");
+        if(modal) document.body.removeChild(modal);
+        let isJson = fileName.toLowerCase().endsWith('.json');
+        carregarProjetoFromContent(content, isJson);
+    })
+    .catch(err => {
+        alert("Falha ao baixar arquivo. Tente novamente.");
+        btn.innerText = "Carregar";
+        btn.disabled = false;
+    });
+}
 
 // ==========================================
 // INTEGRAÇÃO COM GOOGLE DRIVE (SALVAR DIRETO)
