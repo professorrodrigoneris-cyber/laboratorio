@@ -545,28 +545,65 @@ document.getElementById('import-montador').addEventListener('click', function(e)
 document.getElementById('import-montador').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    Papa.parse(file, {
-        complete: function(results) {
-            let data = results.data.filter(row => row.length >= 7);
-            if (data[0] && data[0][1] === "Data") data.shift();
-            
-            montadorLista = data.map(r => [getUniqueId(), r[1], r[2], r[3], r[4], r[5], r[6]||""]);
-            // Agg data entries
-            dataDisponiveis = [];
-            montadorLista.forEach(row => {
-                if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
-            });
-            let comboData = document.getElementById("mont-data");
-            comboData.innerHTML = "";
-            dataDisponiveis.sort((a,b) => parseDate(a) - parseDate(b)).forEach(d => {
-                let opt = document.createElement("option"); opt.value = opt.innerText = d; comboData.appendChild(opt);
-            });
-            
-            carregarTurmasMontador();
-            renderizarTabelaMontador();
-            alert("Lista carregada com sucesso.");
-        }
-    });
+    
+    if (file.name.toLowerCase().endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const state = JSON.parse(evt.target.result);
+                if (state.disciplinasSelecionadas) disciplinasSelecionadas = state.disciplinasSelecionadas;
+                if (state.montadorLista) montadorLista = state.montadorLista;
+                if (state.dataInicio) document.getElementById("data-inicio").value = state.dataInicio;
+                if (state.dataFim) document.getElementById("data-fim").value = state.dataFim;
+                
+                carregarSelecaoUI();
+                if (state.dataInicio && state.dataFim) {
+                    atualizarListaDatas();
+                } else {
+                    dataDisponiveis = [];
+                    montadorLista.forEach(row => {
+                        if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
+                    });
+                    let comboData = document.getElementById("mont-data");
+                    comboData.innerHTML = "";
+                    dataDisponiveis.sort((a,b) => parseDate(a) - parseDate(b)).forEach(d => {
+                        let opt = document.createElement("option"); opt.value = opt.innerText = d; comboData.appendChild(opt);
+                    });
+                }
+                carregarTurmasMontador();
+                renderizarTabelaMontador();
+                alert("Projeto carregado com sucesso!");
+            } catch (err) {
+                console.error(err);
+                alert("Erro ao ler o arquivo de projeto (JSON inválido).");
+            }
+        };
+        reader.readAsText(file);
+    } else {
+        // Fallback para CSV antigo
+        Papa.parse(file, {
+            complete: function(results) {
+                let data = results.data.filter(row => row.length >= 7);
+                if (data[0] && data[0][1] === "Data") data.shift();
+                
+                montadorLista = data.map(r => [getUniqueId(), r[1], r[2], r[3], r[4], r[5], r[6]||""]);
+                // Agg data entries
+                dataDisponiveis = [];
+                montadorLista.forEach(row => {
+                    if(!dataDisponiveis.includes(row[1])) dataDisponiveis.push(row[1]);
+                });
+                let comboData = document.getElementById("mont-data");
+                comboData.innerHTML = "";
+                dataDisponiveis.sort((a,b) => parseDate(a) - parseDate(b)).forEach(d => {
+                    let opt = document.createElement("option"); opt.value = opt.innerText = d; comboData.appendChild(opt);
+                });
+                
+                carregarTurmasMontador();
+                renderizarTabelaMontador();
+                alert("Lista carregada com sucesso.");
+            }
+        });
+    }
 });
 
 // ==========================================
@@ -579,27 +616,29 @@ const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaJlOBz
 function exportarMontadorCSV() {
     if(montadorLista.length === 0) return alert("A lista está vazia.");
     
-    let nomeBase = prompt("Digite um nome para o arquivo CSV:");
+    let nomeBase = prompt("Digite um nome para o arquivo do Projeto (.json):");
     if (nomeBase === null) return; // User cancelled
-    if (nomeBase.trim() === "") nomeBase = "Lista_Montador";
+    if (nomeBase.trim() === "") nomeBase = "Projeto_Provas";
     
     let agora = new Date();
     let dataFormatada = ("0" + agora.getDate()).slice(-2) + "-" + ("0" + (agora.getMonth() + 1)).slice(-2) + "-" + agora.getFullYear();
     let horaFormatada = ("0" + agora.getHours()).slice(-2) + ":" + ("0" + agora.getMinutes()).slice(-2);
-    let nomeFinal = `${nomeBase.trim()}_${dataFormatada}_${horaFormatada}.csv`;
+    let nomeFinal = `${nomeBase.trim()}_${dataFormatada}_${horaFormatada}.json`;
     
-    let header = ["ID", "Data", "Aplicação", "Disciplina", "Turma", "Professor", "Observação"];
-    let cvsD = montadorLista.map(row => [row[0], row[1], row[2], row[3], row[4], row[5], row[6]]);
-    let csv = Papa.unparse({ fields: header, data: cvsD });
+    let state = {
+        disciplinasSelecionadas: disciplinasSelecionadas,
+        montadorLista: montadorLista,
+        dataInicio: document.getElementById("data-inicio").value,
+        dataFim: document.getElementById("data-fim").value
+    };
+    let jsonStr = JSON.stringify(state, null, 2);
 
     if (GOOGLE_APPS_SCRIPT_URL) {
-        // Envia direto pro GDrive!
         let formData = new URLSearchParams();
         formData.append('filename', nomeFinal);
-        formData.append('mimeType', 'text/csv');
-        formData.append('data', btoa(unescape(encodeURIComponent(csv))));
+        formData.append('mimeType', 'application/json');
+        formData.append('data', btoa(unescape(encodeURIComponent(jsonStr))));
         
-        // Se usar button load
         alert("Enviando direto para o Google Drive... Aguarde o aviso de conclusão (OK).");
         
         fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -608,17 +647,16 @@ function exportarMontadorCSV() {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: formData.toString()
         }).then(() => {
-            alert("✅ Arquivo enviado com sucesso direto para o Drive!");
+            alert("✅ Arquivo de projeto salvo com sucesso direto no Drive (formato JSON)!");
         }).catch(err => {
             console.error(err);
             alert("Erro de conexão ao salvar na Nuvem. Baixando localmente...");
-            var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+            var blob = new Blob([jsonStr], {type: "application/json;charset=utf-8"});
             saveAs(blob, nomeFinal);
         });
     } else {
-        // Fallback: não tem URL do script configurada
-        alert("Como não há script de Backend Drive configurado em script.js, iremos baixar o arquivo.\nATENÇÃO: Mova-o manualmente para a pasta: \nhttps://drive.google.com/drive/folders/1GLat8E6H91RRW69Jn8dNbHqaoiGPa8PT?usp=sharing");
-        var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+        alert("Como não há script de Backend Drive configurado em script.js, iremos baixar o arquivo.\nATENÇÃO: Mova-o manualmente para a pasta do Drive.");
+        var blob = new Blob([jsonStr], {type: "application/json;charset=utf-8"});
         saveAs(blob, nomeFinal);
     }
 }
