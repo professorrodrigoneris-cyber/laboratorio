@@ -447,6 +447,13 @@ document.getElementById('import-montador').addEventListener('change', function(e
     });
 });
 
+// ==========================================
+// INTEGRAÇÃO COM GOOGLE DRIVE (SALVAR DIRETO)
+// ==========================================
+// Para funcionar o salvamento direto no Drive sem download, cole a URL do seu
+// Google Apps Script abaixo após publicá-lo como "Web App".
+const GOOGLE_APPS_SCRIPT_URL = ""; 
+
 function exportarMontadorCSV() {
     if(montadorLista.length === 0) return alert("A lista está vazia.");
     
@@ -459,13 +466,36 @@ function exportarMontadorCSV() {
     let horaFormatada = ("0" + agora.getHours()).slice(-2) + ":" + ("0" + agora.getMinutes()).slice(-2);
     let nomeFinal = `${nomeBase.trim()}_${dataFormatada}_${horaFormatada}.csv`;
     
-    alert("ATENÇÃO:\nSalve este arquivo na seguinte pasta do Google Drive:\nhttps://drive.google.com/drive/folders/1GLat8E6H91RRW69Jn8dNbHqaoiGPa8PT?usp=sharing");
-
     let header = ["ID", "Data", "Aplicação", "Disciplina", "Turma", "Professor", "Observação"];
     let cvsD = montadorLista.map(row => [row[0], row[1], row[2], row[3], row[4], row[5], row[6]]);
     let csv = Papa.unparse({ fields: header, data: cvsD });
-    var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
-    saveAs(blob, nomeFinal);
+
+    if (GOOGLE_APPS_SCRIPT_URL) {
+        let formData = new URLSearchParams();
+        formData.append('filename', nomeFinal);
+        formData.append('mimeType', 'text/csv');
+        formData.append('data', btoa(unescape(encodeURIComponent(csv))));
+        
+        alert("Enviando direto para o Google Drive... Aguarde o aviso de conclusão (OK).");
+        
+        fetch(GOOGLE_APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+        }).then(res => res.json()).then(data => {
+            if (data.status === "success") alert("✅ Arquivo listado com sucesso direto no Drive!");
+            else alert("❌ Erro do Drive: " + data.message);
+        }).catch(err => {
+            console.error(err);
+            alert("Erro de conexão ao salvar na Nuvem. Baixando localmente...");
+            var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+            saveAs(blob, nomeFinal);
+        });
+    } else {
+        alert("Como não há script de Backend Drive configurado em fundamental.js, iremos baixar o arquivo.\nATENÇÃO: Mova-o manualmente para a pasta: \nhttps://drive.google.com/drive/folders/1GLat8E6H91RRW69Jn8dNbHqaoiGPa8PT?usp=sharing");
+        var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+        saveAs(blob, nomeFinal);
+    }
 }
 
 function exportarWord() {
