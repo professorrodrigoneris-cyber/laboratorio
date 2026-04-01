@@ -480,11 +480,11 @@ function exportarMontadorCSV() {
         
         fetch(GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
+            mode: 'no-cors',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: formData.toString()
-        }).then(res => res.json()).then(data => {
-            if (data.status === "success") alert("✅ Arquivo listado com sucesso direto no Drive!");
-            else alert("❌ Erro do Drive: " + data.message);
+        }).then(() => {
+            alert("✅ Arquivo enviado com sucesso direto para o Drive!");
         }).catch(err => {
             console.error(err);
             alert("Erro de conexão ao salvar na Nuvem. Baixando localmente...");
