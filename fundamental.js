@@ -525,13 +525,13 @@ function abrirModalArquivos() {
               files.forEach(f => {
                   let d = new Date(f.date);
                   let dataStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR').substring(0,5);
-                  html += \`<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                  html += `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
                       <div style="flex:1; overflow:hidden;">
-                          <strong style="display:block; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#333;" title="\${f.name}">\${f.name}</strong>
-                          <span style="font-size:11px; color:#888;">\${dataStr}</span>
+                          <strong style="display:block; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#333;" title="${f.name}">${f.name}</strong>
+                          <span style="font-size:11px; color:#888;">${dataStr}</span>
                       </div>
-                      <button class="btn btn-primary btn-sm" onclick="carregarDoDrive('\${f.id}', '\${f.name}')" style="margin-left:10px;">Carregar</button>
-                  </div>\`;
+                      <button class="btn btn-primary btn-sm" onclick="carregarDoDrive('${f.id}', '${f.name}')" style="margin-left:10px;">Carregar</button>
+                  </div>`;
               });
           }
           document.getElementById('drive-file-list').innerHTML = html;
@@ -569,6 +569,14 @@ function carregarDoDrive(fileId, fileName) {
 const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaJlOBz9g2QjYfxUo5rPdffpXcDPPja6xAeIck8FiQrPWXH8ZTvTIwvh2m3Oa_2VWxWw/exec"; 
 
 function exportarMontadorCSV() {
+    if(montadorLista.length === 0) return alert("A lista está vazia.");
+    let header = ["ID", "Data", "Aplicação", "Disciplina", "Turma", "Professor", "Observação"];
+    let csv = Papa.unparse({ fields: header, data: montadorLista });
+    var blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+    saveAs(blob, "Calendario_Fundamental.csv");
+}
+
+function salvarProjetoDrive() {
     if(montadorLista.length === 0) return alert("A lista está vazia.");
     
     let nomeBase = prompt("Digite um nome para o arquivo do Projeto (.json):");
