@@ -1,0 +1,18 @@
+# Mac OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Google Drive
+*.gdoc
+*.gsheet
+*.gslides
+
+# Editor
+.vscode/
+*.swp
+
+# Este arquivo é o backend do Apps Script – não vai para o GitHub Pages
+# (remova esta linha se quiser incluí-lo no repositório como documentação)
+# google_apps_script.js

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendário de Provas – Sistema de Gestão</title>
+  <meta name="description" content="Sistema de gestão e geração automática de calendário de provas escolares por turma, disciplina e professor." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ===== TOAST NOTIFICATIONS ===== -->
+<div id="toast-container"></div>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">📅</div>
+    <div class="brand-text">
+      <span class="brand-title">CalendárioProva</span>
+      <span class="brand-sub">Sistema de Gestão</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" data-tab="cadastro" onclick="switchTab('cadastro')">
+      <span class="nav-icon">📚</span>
+      <span class="nav-label">Cadastro</span>
+    </button>
+    <button class="nav-item" data-tab="criterios" onclick="switchTab('criterios')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Critérios</span>
+    </button>
+    <button class="nav-item" data-tab="turmas" onclick="switchTab('turmas')">
+      <span class="nav-icon">🏫</span>
+      <span class="nav-label">Turmas</span>
+    </button>
+    <button class="nav-item" data-tab="calendario" onclick="switchTab('calendario')">
+      <span class="nav-icon">🗓️</span>
+      <span class="nav-label">Gerar Calendário</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="data-status" id="data-status">
+      <span class="status-dot"></span>
+      <span id="status-text">Carregando dados...</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="main-content">
+
+  <!-- HEADER -->
+  <header class="page-header">
+    <div class="header-left">
+      <button class="menu-toggle" onclick="toggleSidebar()" title="Menu">☰</button>
+      <div>
+        <h1 id="page-title" class="page-title">Cadastro de Disciplinas</h1>
+        <p id="page-desc" class="page-desc">Gerencie professores, turmas e disciplinas</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost" onclick="exportData()" title="Exportar dados">💾 Exportar</button>
+      <button class="btn btn-ghost" onclick="importData()" title="Importar dados">📂 Importar</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)" />
+    </div>
+  </header>
+
+  <!-- ===================== TAB: CADASTRO ===================== -->
+  <section class="tab-content active" id="tab-cadastro">
+    <div class="content-grid">
+
+      <!-- FORM CARD -->
+      <div class="card form-card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span id="form-mode-icon">➕</span>
+            <span id="form-mode-label">Nova Disciplina</span>
+          </h2>
+        </div>
+        <div class="card-body">
+          <form id="form-disciplina" onsubmit="salvarDisciplina(event)">
+            <input type="hidden" id="edit-id" value="" />
+
+            <div class="form-group">
+              <label class="form-label">Professor *</label>
+              <div class="input-with-btn">
+                <input type="text" id="inp-professor" class="form-input" placeholder="Nome do professor" list="list-professores" required autocomplete="off" />
+                <datalist id="list-professores"></datalist>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Turma *</label>
+              <div class="input-with-btn">
+                <input type="text" id="inp-turma" class="form-input" placeholder="Ex: 6º Ano A" list="list-turmas" required autocomplete="off" />
+                <datalist id="list-turmas"></datalist>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Disciplina *</label>
+              <input type="text" id="inp-disciplina" class="form-input" placeholder="Nome da disciplina" required autocomplete="off" />
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Segmento *</label>
+                <select id="inp-segmento" class="form-select" required>
+                  <option value="">-- Selecione --</option>
+                  <option value="Fundamental I">Fundamental I</option>
+                  <option value="Fundamental II">Fundamental II</option>
+                  <option value="Médio">Médio</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Eletiva?</label>
+                <div class="toggle-group">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="inp-eletiva" class="toggle-input" />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-text">Sim, é eletiva</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" onclick="limparFormCadastro()">🔄 Limpar</button>
+              <button type="submit" class="btn btn-primary" id="btn-salvar">✅ Salvar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- LIST CARD -->
+      <div class="card list-card">
+        <div class="card-header">
+          <h2 class="card-title">📋 Disciplinas Cadastradas</h2>
+          <div class="card-filters">
+            <input type="text" id="filtro-busca" class="form-input small" placeholder="🔍 Buscar..." oninput="filtrarDisciplinas()" />
+            <select id="filtro-segmento" class="form-select small" onchange="filtrarDisciplinas()">
+              <option value="">Todos segmentos</option>
+              <option value="Fundamental I">Fund. I</option>
+              <option value="Fundamental II">Fund. II</option>
+              <option value="Médio">Médio</option>
+            </select>
+            <select id="filtro-professor" class="form-select small" onchange="filtrarDisciplinas()">
+              <option value="">Todos professores</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="stats-bar">
+            <span class="stat-badge" id="total-badge">0 disciplinas</span>
+            <span class="stat-badge eletiva" id="eletiva-badge">0 eletivas</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table" id="tabela-disciplinas">
+              <thead>
+                <tr>
+                  <th>Disciplina</th>
+                  <th>Turma</th>
+                  <th>Professor</th>
+                  <th>Segmento</th>
+                  <th>Eletiva</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-disciplinas">
+                <tr><td colspan="6" class="empty-row">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== TAB: CRITÉRIOS ===================== -->
+  <section class="tab-content" id="tab-criterios">
+    <div class="criterios-grid">
+
+      <!-- Disponibilidade de Professores -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">👩‍🏫 Disponibilidade dos Professores</h2>
+          <p class="card-subtitle">Defina quais dias da semana cada professor está na escola</p>
+        </div>
+        <div class="card-body" id="disponibilidade-container">
+          <!-- Gerado por JS -->
+        </div>
+      </div>
+
+      <!-- Preferências de Disciplinas -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">⭐ Preferências de Disciplinas</h2>
+          <p class="card-subtitle">Prioridade, ordem de aplicação e dias preferidos</p>
+        </div>
+        <div class="card-body">
+          <div class="pref-filter-bar">
+            <input type="text" id="pref-busca" class="form-input small" placeholder="🔍 Buscar disciplina..." oninput="filtrarPreferencias()" />
+            <select id="pref-turma-filter" class="form-select small" onchange="filtrarPreferencias()">
+              <option value="">Todas as turmas</option>
+            </select>
+          </div>
+          <div class="table-wrapper" style="max-height:420px">
+            <table class="data-table" id="tabela-preferencias">
+              <thead>
+                <tr>
+                  <th>Disciplina</th>
+                  <th>Turma</th>
+                  <th>Prioridade</th>
+                  <th>Ordem</th>
+                  <th>Dia Fixo</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-preferencias"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configuração Geral -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🔧 Configuração Geral</h2>
+        </div>
+        <div class="card-body">
+          <div class="config-grid">
+            <div class="form-group">
+              <label class="form-label">Máximo de provas por dia (padrão)</label>
+              <input type="number" id="config-max-provas" class="form-input" value="2" min="1" max="5" onchange="salvarConfig()" />
+              <small class="form-hint">Pode ser ajustado por turma na aba Turmas</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Intervalo mínimo entre provas (dias)</label>
+              <input type="number" id="config-intervalo" class="form-input" value="1" min="0" max="5" onchange="salvarConfig()" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Incluir fins de semana?</label>
+              <div class="toggle-group">
+                <label class="toggle-label">
+                  <input type="checkbox" id="config-fds" class="toggle-input" onchange="salvarConfig()" />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-text">Permitir provas nos fins de semana</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:16px">
+            <label class="form-label">🚫 Datas bloqueadas (feriados, eventos)</label>
+            <div class="blocked-dates-manager">
+              <div class="blocked-input-row">
+                <input type="date" id="nova-data-bloqueada" class="form-input" />
+                <input type="text" id="motivo-data-bloqueada" class="form-input" placeholder="Motivo (opcional)" />
+                <button class="btn btn-secondary" onclick="adicionarDataBloqueada()">+ Adicionar</button>
+              </div>
+              <ul class="blocked-dates-list" id="blocked-dates-list"></ul>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px" onclick="salvarConfig()">💾 Salvar Configurações</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== TAB: TURMAS ===================== -->
+  <section class="tab-content" id="tab-turmas">
+    <div class="turmas-layout">
+
+      <!-- Painel esquerdo: seleção de turmas -->
+      <div class="card turmas-panel">
+        <div class="card-header">
+          <h2 class="card-title">🏫 Turmas no Calendário</h2>
+          <p class="card-subtitle">Defina quais turmas participam do quadro de provas</p>
+        </div>
+        <div class="card-body">
+          <div class="segmento-filter">
+            <button class="seg-btn active" onclick="filtrarTurmasPorSegmento('todos', this)">Todos</button>
+            <button class="seg-btn" onclick="filtrarTurmasPorSegmento('Fundamental I', this)">Fund. I</button>
+            <button class="seg-btn" onclick="filtrarTurmasPorSegmento('Fundamental II', this)">Fund. II</button>
+            <button class="seg-btn" onclick="filtrarTurmasPorSegmento('Médio', this)">Médio</button>
+          </div>
+          <div class="turmas-actions-row">
+            <button class="btn btn-ghost small" onclick="selecionarTodasTurmas(true)">✅ Selec. todos</button>
+            <button class="btn btn-ghost small" onclick="selecionarTodasTurmas(false)">❌ Desmarcar todos</button>
+          </div>
+          <div id="turmas-checkboxes" class="turmas-checkboxes"></div>
+        </div>
+      </div>
+
+      <!-- Painel direito: configuração por turma -->
+      <div class="card turmas-config-panel">
+        <div class="card-header">
+          <h2 class="card-title">⚙️ Configuração por Turma</h2>
+          <p class="card-subtitle">Personalize o comportamento de cada turma</p>
+        </div>
+        <div class="card-body" id="turma-config-list">
+          <div class="empty-state">
+            <div class="empty-icon">🏫</div>
+            <p>Selecione turmas ao lado para configurar</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Disciplinas por turma -->
+    <div class="card turma-disciplinas-card" style="margin-top:20px">
+      <div class="card-header">
+        <h2 class="card-title">📋 Disciplinas por Turma</h2>
+        <select id="turma-disc-view" class="form-select small" onchange="renderDisciplinasTurma()">
+          <option value="">-- Selecione uma turma --</option>
+        </select>
+      </div>
+      <div class="card-body" id="disciplinas-turma-body">
+        <div class="empty-state"><div class="empty-icon">📚</div><p>Selecione uma turma acima</p></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===================== TAB: CALENDÁRIO ===================== -->
+  <section class="tab-content" id="tab-calendario">
+
+    <!-- Painel de Geração -->
+    <div class="cal-top-panel">
+      <div class="card cal-config-card">
+        <div class="card-header">
+          <h2 class="card-title">🗓️ Gerar Calendário de Provas</h2>
+          <p class="card-subtitle">Configure o período e clique em Gerar</p>
+        </div>
+        <div class="card-body">
+          <div class="cal-form-row">
+            <div class="form-group">
+              <label class="form-label">📅 Data Inicial</label>
+              <input type="date" id="cal-data-inicio" class="form-input cal-date" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">📅 Data Final</label>
+              <input type="date" id="cal-data-fim" class="form-input cal-date" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Turmas incluídas</label>
+              <div class="turmas-summary" id="turmas-summary">—</div>
+            </div>
+          </div>
+          <div class="cal-actions">
+            <button class="btn btn-ghost" onclick="abrirCalendarioSalvo()">📂 Abrir Calendário</button>
+            <button class="btn btn-secondary" onclick="limparCalendario()">🗑️ Limpar</button>
+            <button class="btn btn-primary large" onclick="gerarCalendario()" id="btn-gerar">
+              <span class="btn-icon">⚡</span> Gerar Calendário Automático
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultado -->
+    <div id="calendario-resultado" style="display:none">
+      <div class="cal-result-header">
+        <h2 class="result-title">📊 Calendário Gerado</h2>
+        <div class="result-actions">
+          <button class="btn btn-ghost" onclick="salvarCalendarioDrive()">☁️ Salvar no Drive</button>
+          <button class="btn btn-ghost" onclick="exportarCalendarioCSV()">⬇️ Exportar CSV</button>
+          <button class="btn btn-ghost" onclick="imprimirCalendario()">🖨️ Imprimir</button>
+        </div>
+      </div>
+
+      <!-- Tabs internas do calendário -->
+      <div class="cal-view-tabs">
+        <button class="cal-tab active" onclick="mudarVisualizacao('grid', this)">📅 Visão Calendário</button>
+        <button class="cal-tab" onclick="mudarVisualizacao('lista', this)">📋 Visão por Turma</button>
+        <button class="cal-tab" onclick="mudarVisualizacao('professor', this)">👩‍🏫 Visão por Professor</button>
+      </div>
+
+      <div id="cal-view-grid" class="cal-view active">
+        <div id="calendario-grid"></div>
+      </div>
+      <div id="cal-view-lista" class="cal-view">
+        <div id="calendario-lista"></div>
+      </div>
+      <div id="cal-view-professor" class="cal-view">
+        <div id="calendario-professor"></div>
+      </div>
+    </div>
+
+    <!-- ===== PAINEL: DISCIPLINAS NÃO ALOCADAS ===== -->
+    <div id="painel-nao-couberam" class="nao-couberam-painel" style="display:none;margin-top:24px">
+      <div class="nao-couberam-header">
+        <div class="nao-couberam-title">
+          ⚠️ Disciplinas Fora do Período
+          <span class="nao-count-badge" id="nao-couberam-count">0</span>
+        </div>
+        <p class="nao-couberam-desc">
+          Estas disciplinas não couberam no período definido. Escolha uma data e adicione uma observação para inseri-las manualmente.
+          Caso outro professor aplique, anote no campo de observação.
+        </p>
+      </div>
+      <div class="table-wrapper" style="max-height:420px">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Disciplina</th>
+              <th>Turma</th>
+              <th>Professor</th>
+              <th>Motivo</th>
+              <th>📅 Data Manual</th>
+              <th>📝 Observação</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-nao-couberam"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+
+<!-- ===== MODAL: CONFIRMAÇÃO ===== -->
+<div class="modal-overlay" id="modal-confirm" onclick="fecharModal('modal-confirm')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-icon" id="modal-icon">⚠️</div>
+    <h3 class="modal-title" id="modal-title">Confirmar ação</h3>
+    <p class="modal-body" id="modal-body">Tem certeza?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-confirm')">Cancelar</button>
+      <button class="btn btn-danger" id="modal-confirm-btn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: ABRIR CALENDÁRIO ===== -->
+<div class="modal-overlay" id="modal-abrir-cal" onclick="fecharModal('modal-abrir-cal')">
+  <div class="modal-box wide" onclick="event.stopPropagation()">
+    <h3 class="modal-title">☁️ Abrir Calendário do Drive</h3>
+
+    <!-- Lista de arquivos do Drive -->
+    <div id="drive-files-list" style="margin-bottom:16px;max-height:260px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-md)">
+      <div style="text-align:center;padding:20px;color:var(--text-muted)">
+        <span class="spinner"></span> Aguardando conexão...
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:12px 0">
+      <div style="flex:1;height:1px;background:var(--border-color)"></div>
+      <span style="font-size:12px;color:var(--text-muted)">ou carregar arquivo local</span>
+      <div style="flex:1;height:1px;background:var(--border-color)"></div>
+    </div>
+
+    <div class="upload-area" onclick="document.getElementById('cal-file-input').click()">
+      <div class="upload-icon">📁</div>
+      <p>Clique para selecionar arquivo .json</p>
+      <small>Arquivo de calendário exportado anteriormente</small>
+    </div>
+    <input type="file" id="cal-file-input" accept=".json" style="display:none" onchange="carregarCalendarioArquivo(event)" />
+
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn btn-ghost small" onclick="listarCalendariosDrive()">🔄 Atualizar lista</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-abrir-cal')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+
+<script src="app.js"></script>
+</body>
+</html>
