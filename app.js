@@ -1028,165 +1028,150 @@ function gerarCalendario() {
 }
 
 // =============================================
-// ALGORITMO DE GERAÇÃO (v2 – sem conflito global de professor)
+// ALGORITMO DE GERAÇÃO (v3 – dia a dia, turma a turma)
 // =============================================
 function algoritmoGeracao(inicio, fim) {
   const cfg       = STATE.criterios.config;
   const maxDia    = cfg.maxProvasDia || 2;
   const intervalo = cfg.intervaloMinimo || 1;
   const bloqueadas = new Set((cfg.datasBloqueadas || []).map(x => x.data));
+  const priorMap   = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
 
-  // ---- Dias disponíveis no período ----
+  // ---- Dias disponíveis ----
   const diasDisponiveis = [];
   let d = inicio;
   while (d <= fim) {
     const dow = getDayOfWeek(d);
-    const isWeekend = dow === 0 || dow === 6;
-    if (!bloqueadas.has(d) && (!isWeekend || cfg.incluirFDS)) {
+    if (!bloqueadas.has(d) && (dow !== 0 && dow !== 6 || cfg.incluirFDS)) {
       diasDisponiveis.push(d);
     }
     d = addDays(d, 1);
   }
   if (!diasDisponiveis.length) throw new Error('Nenhum dia disponível no período selecionado!');
 
-  const resultado    = {};  // { data: [{ turma, disciplina, professor, ... }] }
-  const naoCouberem  = [];  // [{ turma, disciplina, professor, motivo }]
+  // ---- Monta disciplinas PENDENTES por turma (ordenadas por prioridade) ----
+  // Cada item tem uma chave única para rastrear alocação
+  const pendentePorTurma = {}; // { turma: [disc, ...] }
+  const turmasOrdem = [...STATE.turmas.ativas].sort((a, b) => sortTurma(a, b));
 
-  // ----
-  // NOVO: professorDia é GLOBAL – impede mesmo professor em QUALQUER turma no mesmo dia
-  // { 'Prof|2025-05-10': true }
-  const professorDiaGlobal = {};
-
-  // ---- Registros por turma dentro do mesmo dia ----
-  // { 'turma|data': count }
-  const provasDiaTurmaMap = {};
-
-  // ---- Intervalo: última prova de cada disciplina de cada turma ----
-  // { 'turma|disciplina': ultimaData }
-  const ultimaDiaMap = {};
-
-  // ---- Monta lista global de disciplinas a alocar, ordenada por prioridade ----
-  // Isso garante que disciplinas de alta prioridade (de qualquer turma) sejam
-  // alocadas primeiro, permitindo que o professor aplique em sequência lógica.
-  let todasDisc = [];
-
-  [...STATE.turmas.ativas].forEach(turma => {
+  turmasOrdem.forEach(turma => {
     const turmaConfig   = STATE.turmas.config[turma] || {};
     const discIdsAtivas = turmaConfig.disciplinasAtivas;
     let discList = STATE.disciplinas.filter(x => x.turma === turma);
     if (discIdsAtivas && discIdsAtivas.length) {
       discList = discList.filter(x => discIdsAtivas.includes(x.id));
     }
-    discList.forEach(disc => {
-      todasDisc.push({ ...disc, _turma: turma });
+    // Ordena por ordem de prova → prioridade
+    discList = discList.slice().sort((a, b) => {
+      const pa = STATE.criterios.preferencias[String(a.id)] || {};
+      const pb = STATE.criterios.preferencias[String(b.id)] || {};
+      const orderA = pa.ordem ? parseInt(pa.ordem) : 99;
+      const orderB = pb.ordem ? parseInt(pb.ordem) : 99;
+      const prioA  = priorMap[pa.prioridade || 'Media'] ?? 1;
+      const prioB  = priorMap[pb.prioridade || 'Media'] ?? 1;
+      if (orderA !== orderB) return orderA - orderB;
+      return prioA - prioB;
     });
+    // Marca cada uma com alocada = false
+    pendentePorTurma[turma] = discList.map(x => ({ ...x, _alocada: false }));
   });
 
-  // Ordena global: por ordem de prova → prioridade → turma (alfabética)
-  const priorMap = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
-  todasDisc.sort((a, b) => {
-    const pa = STATE.criterios.preferencias[String(a.id)] || {};
-    const pb = STATE.criterios.preferencias[String(b.id)] || {};
-    const orderA = pa.ordem ? parseInt(pa.ordem) : 99;
-    const orderB = pb.ordem ? parseInt(pb.ordem) : 99;
-    const prioA  = priorMap[pa.prioridade || 'Media'] ?? 1;
-    const prioB  = priorMap[pb.prioridade || 'Media'] ?? 1;
-    if (orderA !== orderB) return orderA - orderB;
-    if (prioA  !== prioB)  return prioA  - prioB;
-    return a._turma.localeCompare(b._turma);
-  });
+  const resultado          = {};  // { data: [{ turma, disciplina, ... }] }
+  const naoCouberem        = [];  // disciplinas que sobraram
+  const professorDiaGlobal = {};  // { 'prof|data': true } — professor em 1 turma/dia
+  const ultimaDiaMap       = {};  // { 'turma|disc': ultimaData }
 
-  // ---- ALOCAÇÃO ----
-  for (const disc of todasDisc) {
-    const turma    = disc._turma;
-    const turmaConfig = STATE.turmas.config[turma] || {};
-    const maxTurma = turmaConfig.maxProvas || maxDia;
-    const pref     = STATE.criterios.preferencias[String(disc.id)] || {};
-    const prof     = disc.professor;
-    const diasProf = STATE.criterios.professores[prof]?.dias || [1,2,3,4,5];
-    const diaFixo  = pref.diaFixo ? parseInt(pref.diaFixo) : null;
+  // =====================================================
+  // ESTRATÉGIA: DIA a DIA → TURMA a TURMA → SLOTS
+  // Para cada dia útil, para cada turma ativa, tenta
+  // preencher até maxTurma provas com professores
+  // disponíveis e sem conflitos naquele dia.
+  // =====================================================
+  for (const data of diasDisponiveis) {
+    const dow = getDayOfWeek(data);
 
-    let alocado = false;
-    let motivoFalha = '';
+    for (const turma of turmasOrdem) {
+      const turmaConfig = STATE.turmas.config[turma] || {};
+      const maxTurma    = turmaConfig.maxProvas || maxDia;
+      const pendentes   = pendentePorTurma[turma];
+      if (!pendentes || !pendentes.length) continue;
 
-    for (const data of diasDisponiveis) {
-      const dow = getDayOfWeek(data);
+      // Quantas provas já foram alocadas nesta turma neste dia?
+      const turmaDiaKey    = turma + '|' + data;
+      let   slotsUsados    = 0;
 
-      // 1️⃣ Professor disponível neste dia da semana?
-      if (!diasProf.includes(dow)) { motivoFalha = 'Prof. indisponível no dia'; continue; }
+      // Tenta preencher os slots disponíveis
+      for (const disc of pendentes) {
+        if (disc._alocada) continue;        // já alocada em dia anterior
+        if (slotsUsados >= maxTurma) break; // slots do dia cheios
 
-      // 2️⃣ Dia fixo da disciplina?
-      if (diaFixo !== null && dow !== diaFixo) { motivoFalha = 'Dia fixo não coincide'; continue; }
+        const prof     = disc.professor;
+        const pref     = STATE.criterios.preferencias[String(disc.id)] || {};
+        const diasProf = STATE.criterios.professores[prof]?.dias || [1,2,3,4,5];
+        const diaFixo  = pref.diaFixo ? parseInt(pref.diaFixo) : null;
 
-      // 3️⃣ Intervalo mínimo desde última prova desta disciplina nesta turma
-      const keyCont = turma + '|' + disc.disciplina;
-      if (ultimaDiaMap[keyCont]) {
-        if (daysBetween(ultimaDiaMap[keyCont], data) < intervalo) {
-          motivoFalha = 'Intervalo mínimo não respeitado'; continue;
-        }
+        // 1️⃣ Professor disponível no dia da semana?
+        if (!diasProf.includes(dow)) continue;
+
+        // 2️⃣ Dia fixo da disciplina?
+        if (diaFixo !== null && dow !== diaFixo) continue;
+
+        // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
+        const keyCont = turma + '|' + disc.disciplina;
+        if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) continue;
+
+        // 4️⃣ CONFLITO GLOBAL: professor já aplicou em outra turma hoje?
+        const profKeyGlobal = prof + '|' + data;
+        if (professorDiaGlobal[profKeyGlobal]) continue;
+
+        // ✅ ALOCA!
+        if (!resultado[data]) resultado[data] = [];
+        resultado[data].push({
+          turma,
+          disciplina: disc.disciplina,
+          professor:  prof,
+          eletiva:    disc.eletiva,
+          segmento:   disc.segmento,
+          prioridade: pref.prioridade || 'Media',
+          discId:     disc.id,
+          observacao: '',
+        });
+
+        professorDiaGlobal[profKeyGlobal] = true; // bloqueia professor globalmente
+        ultimaDiaMap[keyCont]             = data;
+        disc._alocada                     = true;
+        slotsUsados++;
       }
-
-      // 4️⃣ CONFLITO GLOBAL DE PROFESSOR: esse professor já tem prova em QUALQUER turma neste dia?
-      const profKeyGlobal = prof + '|' + data;
-      if (professorDiaGlobal[profKeyGlobal]) { motivoFalha = 'Professor já ocupado neste dia (outra turma)'; continue; }
-
-      // 5️⃣ Limite de provas desta turma neste dia
-      const turmaDiaKey = turma + '|' + data;
-      const countTurmaDia = provasDiaTurmaMap[turmaDiaKey] || 0;
-      if (countTurmaDia >= maxTurma) { motivoFalha = 'Limite de provas/dia da turma atingido'; continue; }
-
-      // ✅ ALOCA!
-      if (!resultado[data]) resultado[data] = [];
-      resultado[data].push({
-        turma,
-        disciplina: disc.disciplina,
-        professor:  prof,
-        eletiva:    disc.eletiva,
-        segmento:   disc.segmento,
-        prioridade: pref.prioridade || 'Media',
-        discId:     disc.id,
-        observacao: '',
-      });
-
-      ultimaDiaMap[keyCont]          = data;
-      professorDiaGlobal[profKeyGlobal] = true;  // bloqueia prof globalmente
-      provasDiaTurmaMap[turmaDiaKey] = countTurmaDia + 1;
-      alocado = true;
-      break;
-    }
-
-    if (!alocado) {
-      naoCouberem.push({
-        turma,
-        disciplina: disc.disciplina,
-        professor:  prof,
-        eletiva:    disc.eletiva,
-        segmento:   disc.segmento,
-        discId:     disc.id,
-        motivo:     motivoFalha || 'Período insuficiente',
-        observacao: '',
-        dataManual: '',
-      });
     }
   }
+
+  // ---- Coleta não alocadas ----
+  turmasOrdem.forEach(turma => {
+    (pendentePorTurma[turma] || []).forEach(disc => {
+      if (!disc._alocada) {
+        const pref = STATE.criterios.preferencias[String(disc.id)] || {};
+        naoCouberem.push({
+          turma,
+          disciplina: disc.disciplina,
+          professor:  disc.professor,
+          eletiva:    disc.eletiva,
+          segmento:   disc.segmento,
+          discId:     disc.id,
+          motivo:     'Período insuficiente ou professor ocupado em outra turma',
+          observacao: '',
+          dataManual: '',
+        });
+      }
+    });
+  });
 
   return { resultado, naoCouberem };
 }
 
-function ordenarDisciplinas(discList) {
-  const priorMap = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
-  return [...discList].sort((a, b) => {
-    const pa = STATE.criterios.preferencias[String(a.id)] || {};
-    const pb = STATE.criterios.preferencias[String(b.id)] || {};
-    const orderA = pa.ordem ? parseInt(pa.ordem) : 99;
-    const orderB = pb.ordem ? parseInt(pb.ordem) : 99;
-    const prioA  = priorMap[pa.prioridade || 'Media'] ?? 1;
-    const prioB  = priorMap[pb.prioridade || 'Media'] ?? 1;
-    if (orderA !== orderB) return orderA - orderB;
-    if (prioA  !== prioB)  return prioA  - prioB;
-    return 0;
-  });
-}
+
+
+
+
 
 function daysBetween(d1, d2) {
   const a = new Date(d1 + 'T12:00:00');
