@@ -1111,6 +1111,14 @@ function algoritmoGeracao(inicio, fim) {
     pendentePorTurma[turma] = discList.map(x => ({ ...x, _alocada: false }));
   });
 
+  // Re-ordena turmas: turmas com MAIS disciplinas são alocadas primeiro
+  // para garantir que seus professores sejam priorizados
+  turmasOrdem.sort((a, b) => {
+    const countA = (pendentePorTurma[a] || []).length;
+    const countB = (pendentePorTurma[b] || []).length;
+    return countB - countA; // decrescente
+  });
+
 
   const resultado          = {};  // { data: [{ turma, disciplina, ... }] }
   const naoCouberem        = [];  // disciplinas que sobraram
@@ -1132,12 +1140,22 @@ function algoritmoGeracao(inicio, fim) {
       const pendentes   = pendentePorTurma[turma];
       if (!pendentes || !pendentes.length) continue;
 
-      // Quantas provas já foram alocadas nesta turma neste dia?
-      const turmaDiaKey    = turma + '|' + data;
-      let   slotsUsados    = 0;
+      // Conta disciplinas restantes desta turma
+      const remaining = pendentes.filter(x => !x._alocada).length;
+      if (remaining === 0) continue;
 
-      // Tenta preencher os slots disponíveis
-      // Agrupa disciplinas pendentes por professor para alocar juntas na mesma turma
+      // Calcula quantos dias disponíveis restam (incluindo hoje)
+      const dayIndex = diasDisponiveis.indexOf(data);
+      const daysLeft = diasDisponiveis.length - dayIndex;
+
+      // ★ EFFECTIVE MAX DINÂMICO ★
+      // Distribui proporcionalmente: turmas com poucas disciplinas
+      // usam 1 prova/dia para espalhar por todo o período
+      const effectiveMax = Math.min(maxTurma, Math.max(1, Math.ceil(remaining / daysLeft)));
+
+      let slotsUsados = 0;
+
+      // Agrupa disciplinas pendentes por professor
       const profGroups = [];
       const visitedProfs = new Set();
       pendentes.forEach(d => {
@@ -1147,8 +1165,22 @@ function algoritmoGeracao(inicio, fim) {
         }
       });
 
+      // Ordena profGroups: quando há 2+ slots disponíveis,
+      // prefere grupos maiores (pares do mesmo prof) para usar os slots de forma eficiente.
+      // Quando só há 1 slot, grupos de 1 vêm naturalmente primeiro.
+      profGroups.sort((a, b) => {
+        const slotsDisp = effectiveMax;
+        const aFits = a.length <= slotsDisp;
+        const bFits = b.length <= slotsDisp;
+        // Grupos que cabem nos slots disponíveis vêm primeiro
+        if (aFits !== bFits) return aFits ? -1 : 1;
+        // Entre grupos que cabem, prefere os maiores (usa slots de forma eficiente)
+        if (aFits && bFits && a.length !== b.length) return b.length - a.length;
+        return 0; // mantém ordem de prioridade original
+      });
+
       for (const group of profGroups) {
-        if (slotsUsados >= maxTurma) break;
+        if (slotsUsados >= effectiveMax) break;
 
         const prof = group[0].professor;
         const diasProf = STATE.criterios.professores[prof]?.dias || [1,2,3,4,5];
@@ -1157,33 +1189,27 @@ function algoritmoGeracao(inicio, fim) {
         if (!diasProf.includes(dow)) continue;
 
         // 4️⃣ CONFLITO GLOBAL: professor já aplicou em outra turma hoje?
-        // Permitimos que aplique várias provas na MESMA turma (armazenamos o nome da turma)
         const profKeyGlobal = prof + '|' + data;
         if (professorDiaGlobal[profKeyGlobal] && professorDiaGlobal[profKeyGlobal] !== turma) continue;
 
-        // Filtra apenas as disciplinas do grupo que passam nas validações individuais
+        // Filtra disciplinas elegíveis do grupo
         const elegíveis = group.filter(disc => {
           const pref = STATE.criterios.preferencias[String(disc.id)] || {};
           const diaFixo = pref.diaFixo ? parseInt(pref.diaFixo) : null;
-
-          // 2️⃣ Dia fixo da disciplina?
           if (diaFixo !== null && dow !== diaFixo) return false;
-
-          // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
           const keyCont = turma + '|' + disc.disciplina;
           if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) return false;
-
           return true;
         });
 
         if (!elegíveis.length) continue;
 
         // Quantos slots restam hoje para esta turma?
-        const slotsRestantes = maxTurma - slotsUsados;
+        const slotsRestantes = effectiveMax - slotsUsados;
         // Pega no máximo o que cabe nos slots do dia
         const chunk = elegíveis.slice(0, slotsRestantes);
 
-        // ✅ ALOCA O CHUNK (respeitando o limite de provas/dia)
+        // ✅ ALOCA O CHUNK (respeitando o limite dinâmico de provas/dia)
         for (const disc of chunk) {
           if (!resultado[data]) resultado[data] = [];
           const pref = STATE.criterios.preferencias[String(disc.id)] || {};
@@ -1199,7 +1225,7 @@ function algoritmoGeracao(inicio, fim) {
             observacao: '',
           });
 
-          professorDiaGlobal[profKeyGlobal] = turma; // registra a turma em que aplicou hoje
+          professorDiaGlobal[profKeyGlobal] = turma;
           const keyCont = turma + '|' + disc.disciplina;
           ultimaDiaMap[keyCont]             = data;
           disc._alocada                     = true;
