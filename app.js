@@ -1308,6 +1308,74 @@ function renderNaoCouberem() {
   renderVisualizacaoLista();
 }
 
+// =============================================
+// MODAL: AGENDA DO PROFESSOR (clique na disciplina)
+// =============================================
+function mostrarAgendaProfessor(profName) {
+  if (!STATE.calendario) return;
+
+  // Coleta todas as provas alocadas deste professor
+  const provasProf = [];
+  Object.entries(STATE.calendario).forEach(([data, provas]) => {
+    provas.forEach(p => {
+      if (p.professor === profName) {
+        provasProf.push({ data, ...p });
+      }
+    });
+  });
+
+  // Também inclui as não alocadas deste professor
+  const naoProfessor = (STATE.naoCouberem || []).filter(x => x.professor === profName);
+
+  // Ordena por data
+  provasProf.sort((a, b) => a.data.localeCompare(b.data));
+
+  // Preenche o modal
+  document.getElementById('agenda-prof-title').textContent = `👩‍🏫 ${profName}`;
+  document.getElementById('agenda-prof-desc').textContent =
+    `${provasProf.length} prova(s) alocada(s)${naoProfessor.length ? ` · ${naoProfessor.length} pendente(s)` : ''}`;
+
+  const tbody = document.getElementById('agenda-prof-tbody');
+  let html = '';
+
+  // Provas alocadas
+  html += provasProf.map(p => `
+    <tr>
+      <td>${formatDate(p.data)}</td>
+      <td>${DIAS_SEMANA_FULL[getDayOfWeek(p.data)]}</td>
+      <td>${p.turma}</td>
+      <td><strong>${p.disciplina}</strong>${p.manual ? ' <span class="badge badge-fi" style="font-size:9px">Manual</span>' : ''}</td>
+      <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
+    </tr>`).join('');
+
+  // Provas não alocadas
+  if (naoProfessor.length) {
+    html += `
+      <tr style="background:rgba(245,166,35,.08)">
+        <td colspan="5" style="padding:8px 14px;border-top:2px solid rgba(245,166,35,.3)">
+          <span style="font-weight:600;color:var(--brand-accent)">⚠️ Pendentes (${naoProfessor.length})</span>
+        </td>
+      </tr>`;
+    html += naoProfessor.map(item => `
+      <tr style="background:rgba(245,166,35,.04)">
+        <td colspan="2" style="color:var(--brand-accent)">Sem data</td>
+        <td>${item.turma}</td>
+        <td><strong>${item.disciplina}</strong></td>
+        <td>${item.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
+      </tr>`).join('');
+  }
+
+  if (!provasProf.length && !naoProfessor.length) {
+    html = '<tr><td colspan="5" class="empty-row">Nenhuma prova encontrada</td></tr>';
+  }
+
+  tbody.innerHTML = html;
+
+  // Abre o modal
+  document.getElementById('modal-agenda-prof').classList.add('active');
+}
+
+
 function setNaoDataManual(idx, data) {
   if (STATE.naoCouberem[idx]) {
     STATE.naoCouberem[idx].dataManual = data;
@@ -1490,7 +1558,7 @@ function renderVisualizacaoLista() {
       <tr ${p.manual ? 'style="background:rgba(245,166,35,.06)"' : ''}>
         <td>${formatDate(p.data)}</td>
         <td>${DIAS_SEMANA_FULL[getDayOfWeek(p.data)]}</td>
-        <td><strong>${p.disciplina}</strong>${p.manual ? ' <span class="badge badge-fi" style="font-size:9px">Manual</span>' : ''}</td>
+        <td><strong style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="mostrarAgendaProfessor('${p.professor}')" title="Ver agenda de ${p.professor}">${p.disciplina}</strong>${p.manual ? ' <span class="badge badge-fi" style="font-size:9px">Manual</span>' : ''}</td>
         <td>${p.professor}</td>
         <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
         <td><small style="color:var(--text-muted)">${p.observacao || '—'}</small></td>
@@ -1511,7 +1579,7 @@ function renderVisualizacaoLista() {
               value="${item.dataManual || ''}"
               onchange="setNaoDataManual(${item._idx}, this.value)" />
           </td>
-          <td><strong>${item.disciplina}</strong></td>
+          <td><strong style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="mostrarAgendaProfessor('${item.professor}')" title="Ver agenda de ${item.professor}">${item.disciplina}</strong></td>
           <td>${item.professor}</td>
           <td>${item.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
           <td>

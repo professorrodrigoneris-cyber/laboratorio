@@ -440,6 +440,31 @@
   </div>
 </div>
 
+<!-- ===== MODAL: AGENDA DO PROFESSOR ===== -->
+<div class="modal-overlay" id="modal-agenda-prof" onclick="fecharModal('modal-agenda-prof')">
+  <div class="modal-box wide" onclick="event.stopPropagation()" style="max-width:640px">
+    <h3 class="modal-title" id="agenda-prof-title">👩‍🏫 Agenda do Professor</h3>
+    <p id="agenda-prof-desc" style="color:var(--text-muted);font-size:13px;margin-bottom:12px"></p>
+    <div class="table-wrapper" style="max-height:380px">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Dia</th>
+            <th>Turma</th>
+            <th>Disciplina</th>
+            <th>Tipo</th>
+          </tr>
+        </thead>
+        <tbody id="agenda-prof-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-agenda-prof')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: ABRIR CALENDÁRIO ===== -->
 <div class="modal-overlay" id="modal-abrir-cal" onclick="fecharModal('modal-abrir-cal')">
   <div class="modal-box wide" onclick="event.stopPropagation()">
