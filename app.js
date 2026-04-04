@@ -1137,46 +1137,75 @@ function algoritmoGeracao(inicio, fim) {
       let   slotsUsados    = 0;
 
       // Tenta preencher os slots disponíveis
-      for (const disc of pendentes) {
-        if (disc._alocada) continue;        // já alocada em dia anterior
-        if (slotsUsados >= maxTurma) break; // slots do dia cheios
+      // Agrupa disciplinas pendentes por professor para alocar juntas na mesma turma
+      const profGroups = [];
+      const visitedProfs = new Set();
+      pendentes.forEach(d => {
+        if (!d._alocada && !visitedProfs.has(d.professor)) {
+          visitedProfs.add(d.professor);
+          profGroups.push(pendentes.filter(x => !x._alocada && x.professor === d.professor));
+        }
+      });
 
-        const prof     = disc.professor;
-        const pref     = STATE.criterios.preferencias[String(disc.id)] || {};
+      for (const group of profGroups) {
+        if (slotsUsados >= maxTurma) break;
+
+        const prof = group[0].professor;
+
+        // Se o grupo não couber junto hoje (a menos que a turma não tenha provas no dia)
+        if (slotsUsados > 0 && slotsUsados + group.length > maxTurma) {
+          continue;
+        }
+
         const diasProf = STATE.criterios.professores[prof]?.dias || [1,2,3,4,5];
-        const diaFixo  = pref.diaFixo ? parseInt(pref.diaFixo) : null;
-
+        
         // 1️⃣ Professor disponível no dia da semana?
         if (!diasProf.includes(dow)) continue;
 
-        // 2️⃣ Dia fixo da disciplina?
-        if (diaFixo !== null && dow !== diaFixo) continue;
-
-        // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
-        const keyCont = turma + '|' + disc.disciplina;
-        if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) continue;
-
         // 4️⃣ CONFLITO GLOBAL: professor já aplicou em outra turma hoje?
+        // Permitimos que aplique várias provas na MESMA turma (aramazenamos o nome da turma)
         const profKeyGlobal = prof + '|' + data;
-        if (professorDiaGlobal[profKeyGlobal]) continue;
+        if (professorDiaGlobal[profKeyGlobal] && professorDiaGlobal[profKeyGlobal] !== turma) continue;
 
-        // ✅ ALOCA!
-        if (!resultado[data]) resultado[data] = [];
-        resultado[data].push({
-          turma,
-          disciplina: disc.disciplina,
-          professor:  prof,
-          eletiva:    disc.eletiva,
-          segmento:   disc.segmento,
-          prioridade: pref.prioridade || 'Media',
-          discId:     disc.id,
-          observacao: '',
-        });
+        let podeAlocar = true;
+        for (const disc of group) {
+           const pref = STATE.criterios.preferencias[String(disc.id)] || {};
+           const diaFixo = pref.diaFixo ? parseInt(pref.diaFixo) : null;
+           
+           // 2️⃣ Dia fixo da disciplina?
+           if (diaFixo !== null && dow !== diaFixo) { podeAlocar = false; break; }
 
-        professorDiaGlobal[profKeyGlobal] = true; // bloqueia professor globalmente
-        ultimaDiaMap[keyCont]             = data;
-        disc._alocada                     = true;
-        slotsUsados++;
+           // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
+           const keyCont = turma + '|' + disc.disciplina;
+           if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) { podeAlocar = false; break; }
+        }
+
+        if (!podeAlocar) continue;
+
+        // ✅ ALOCA TODAS DO GRUPO!
+        for (const disc of group) {
+          if (slotsUsados >= maxTurma && slotsUsados > 0 && group.length === 1) break; // sanity check fallback
+          
+          if (!resultado[data]) resultado[data] = [];
+          const pref = STATE.criterios.preferencias[String(disc.id)] || {};
+          
+          resultado[data].push({
+            turma,
+            disciplina: disc.disciplina,
+            professor:  prof,
+            eletiva:    disc.eletiva,
+            segmento:   disc.segmento,
+            prioridade: pref.prioridade || 'Media',
+            discId:     disc.id,
+            observacao: '',
+          });
+
+          professorDiaGlobal[profKeyGlobal] = turma; // registra a turma em que aplicou hoje
+          const keyCont = turma + '|' + disc.disciplina;
+          ultimaDiaMap[keyCont]             = data;
+          disc._alocada                     = true;
+          slotsUsados++;
+        }
       }
     }
   }
