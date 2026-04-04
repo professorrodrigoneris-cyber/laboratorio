@@ -1061,10 +1061,44 @@ function algoritmoGeracao(inicio, fim) {
     if (discIdsAtivas && discIdsAtivas.length) {
       discList = discList.filter(x => discIdsAtivas.includes(x.id));
     }
-    // Ordena por ordem de prova → prioridade
+   // ====================================================
+    // ORDENAÇÃO POR PROFESSOR AGRUPADO
+    // Objetivo: se um professor tem 2+ disciplinas na turma,
+    // elas ficam em sequência (bloco consecutivo de dias).
+    // 
+    // Cada professor recebe uma "nota" baseada na sua
+    // MELHOR disciplina (mais prioritária / menor ordem).
+    // O professor mais prioritário vem primeiro como bloco.
+    // ====================================================
+
+    // 1) Calcula, para cada professor desta turma, a sua melhor nota
+    const profBestPrio  = {}; // { prof: menor valor numérico de prioridade }
+    const profBestOrder = {}; // { prof: menor ordem configurada }
+    discList.forEach(disc => {
+      const pref  = STATE.criterios.preferencias[String(disc.id)] || {};
+      const order = pref.ordem ? parseInt(pref.ordem) : 99;
+      const prio  = priorMap[pref.prioridade || 'Media'] ?? 1;
+      const prof  = disc.professor;
+      if (profBestPrio[prof]  === undefined || prio  < profBestPrio[prof])  profBestPrio[prof]  = prio;
+      if (profBestOrder[prof] === undefined || order < profBestOrder[prof]) profBestOrder[prof] = order;
+    });
+
+    // 2) Ordena: agrupa por professor (bloco), professores ordenados pela sua melhor nota
     discList = discList.slice().sort((a, b) => {
+      const profA = a.professor, profB = b.professor;
       const pa = STATE.criterios.preferencias[String(a.id)] || {};
       const pb = STATE.criterios.preferencias[String(b.id)] || {};
+
+      if (profA !== profB) {
+        // Professores diferentes → ordena pelo professor mais prioritário
+        const pDiff = profBestPrio[profA]  - profBestPrio[profB];
+        if (pDiff !== 0) return pDiff;
+        const oDiff = profBestOrder[profA] - profBestOrder[profB];
+        if (oDiff !== 0) return oDiff;
+        return profA.localeCompare(profB); // desempate alfabético
+      }
+
+      // Mesmo professor → ordena pela ordem/prioridade da própria disciplina
       const orderA = pa.ordem ? parseInt(pa.ordem) : 99;
       const orderB = pb.ordem ? parseInt(pb.ordem) : 99;
       const prioA  = priorMap[pa.prioridade || 'Media'] ?? 1;
@@ -1072,9 +1106,11 @@ function algoritmoGeracao(inicio, fim) {
       if (orderA !== orderB) return orderA - orderB;
       return prioA - prioB;
     });
+
     // Marca cada uma com alocada = false
     pendentePorTurma[turma] = discList.map(x => ({ ...x, _alocada: false }));
   });
+
 
   const resultado          = {};  // { data: [{ turma, disciplina, ... }] }
   const naoCouberem        = [];  // disciplinas que sobraram
