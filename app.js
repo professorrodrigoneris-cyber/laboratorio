@@ -1300,54 +1300,12 @@ function renderNaoCouberem() {
   const painel = document.getElementById('painel-nao-couberam');
   if (!painel) return;
 
-  const lista = STATE.naoCouberem || [];
-  if (!lista.length) {
-    painel.style.display = 'none';
-    return;
-  }
+  // O painel separado não é mais usado — as disciplinas não alocadas
+  // agora aparecem inline dentro de cada turma na "Visão por Turma"
+  painel.style.display = 'none';
 
-  painel.style.display = 'block';
-  const tbody = document.getElementById('tbody-nao-couberam');
-  tbody.innerHTML = lista.map((item, idx) => `
-    <tr class="nao-couberam-row" id="nao-row-${idx}">
-      <td>
-        <span class="badge ${item.eletiva==='Sim'?'badge-eletiva':'badge-regular'}">
-          ${item.eletiva==='Sim'?'✨ Eletiva':'Regular'}
-        </span>
-      </td>
-      <td><strong>${item.disciplina}</strong></td>
-      <td>${item.turma}</td>
-      <td>${item.professor}</td>
-      <td><small style="color:var(--brand-accent)">${item.motivo}</small></td>
-      <td>
-        <input type="date" class="form-input small" style="width:140px"
-          id="nao-data-${idx}"
-          value="${item.dataManual || ''}"
-          onchange="setNaoDataManual(${idx}, this.value)" />
-      </td>
-      <td>
-        <input type="text" class="form-input small" style="min-width:180px"
-          id="nao-obs-${idx}"
-          value="${item.observacao || ''}"
-          placeholder="Observação (ex: Prof. substituto)"
-          oninput="setNaoObservacao(${idx}, this.value)" />
-      </td>
-      <td>
-        <button class="btn btn-secondary small"
-          onclick="inserirNaoAlocado(${idx})"
-          title="Inserir no calendário" ${!item.dataManual?'disabled':''}>
-          ➕ Inserir
-        </button>
-        <button class="btn btn-ghost small" style="margin-left:4px"
-          onclick="descartarNaoAlocado(${idx})"
-          title="Descartar esta disciplina">
-          🗑️
-        </button>
-      </td>
-    </tr>
-  `).join('');
-
-  document.getElementById('nao-couberam-count').textContent = lista.length;
+  // Re-renderiza a lista para atualizar as disciplinas inline
+  renderVisualizacaoLista();
 }
 
 function setNaoDataManual(idx, data) {
@@ -1506,33 +1464,89 @@ function renderVisualizacaoLista() {
     });
   });
 
-  const turmasOrdenadas = Object.keys(porTurma).sort((a,b) => sortTurma(a,b));
+  // Agrupa não-alocadas por turma
+  const naoPorTurma = {};
+  (STATE.naoCouberem || []).forEach((item, idx) => {
+    if (!naoPorTurma[item.turma]) naoPorTurma[item.turma] = [];
+    naoPorTurma[item.turma].push({ ...item, _idx: idx });
+  });
+
+  // Junta todas as turmas (alocadas + não alocadas)
+  const todasTurmas = new Set([...Object.keys(porTurma), ...Object.keys(naoPorTurma)]);
+  const turmasOrdenadas = [...todasTurmas].sort((a,b) => sortTurma(a,b));
+
   if (!turmasOrdenadas.length) {
     container.innerHTML = '<div class="empty-state"><p>Nenhuma prova alocada</p></div>';
     return;
   }
 
   container.innerHTML = turmasOrdenadas.map(turma => {
-    const provas = porTurma[turma].sort((a,b) => a.data.localeCompare(b.data));
+    const provas = (porTurma[turma] || []).sort((a,b) => a.data.localeCompare(b.data));
+    const naoAlocadas = naoPorTurma[turma] || [];
+    const totalCount = provas.length + naoAlocadas.length;
+
+    // Linhas das provas alocadas
+    const provasHTML = provas.map((p,i) => `
+      <tr ${p.manual ? 'style="background:rgba(245,166,35,.06)"' : ''}>
+        <td>${formatDate(p.data)}</td>
+        <td>${DIAS_SEMANA_FULL[getDayOfWeek(p.data)]}</td>
+        <td><strong>${p.disciplina}</strong>${p.manual ? ' <span class="badge badge-fi" style="font-size:9px">Manual</span>' : ''}</td>
+        <td>${p.professor}</td>
+        <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
+        <td><small style="color:var(--text-muted)">${p.observacao || '—'}</small></td>
+      </tr>`).join('');
+
+    // Linhas das disciplinas não alocadas (mesmo estilo/função do painel antigo)
+    const naoAlocadasHTML = naoAlocadas.length ? `
+      <tr style="background:rgba(245,166,35,.08)">
+        <td colspan="6" style="padding:10px 14px;border-top:2px solid rgba(245,166,35,.3)">
+          <span style="font-weight:600;color:var(--brand-accent)">⚠️ Disciplinas Fora do Período (${naoAlocadas.length})</span>
+        </td>
+      </tr>
+      ${naoAlocadas.map(item => `
+        <tr class="nao-couberam-row" id="nao-row-${item._idx}" style="background:rgba(245,166,35,.04)">
+          <td colspan="2" style="text-align:center">
+            <input type="date" class="form-input small" style="width:130px"
+              id="nao-data-${item._idx}"
+              value="${item.dataManual || ''}"
+              onchange="setNaoDataManual(${item._idx}, this.value)" />
+          </td>
+          <td><strong>${item.disciplina}</strong></td>
+          <td>${item.professor}</td>
+          <td>${item.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
+          <td>
+            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+              <input type="text" class="form-input small" style="min-width:140px;flex:1"
+                id="nao-obs-${item._idx}"
+                value="${item.observacao || ''}"
+                placeholder="Observação"
+                oninput="setNaoObservacao(${item._idx}, this.value)" />
+              <button class="btn btn-secondary small"
+                onclick="inserirNaoAlocado(${item._idx})"
+                title="Inserir no calendário" ${!item.dataManual?'disabled':''}>
+                ➕ Inserir
+              </button>
+              <button class="btn btn-ghost small"
+                onclick="descartarNaoAlocado(${item._idx})"
+                title="Descartar">
+                🗑️
+              </button>
+            </div>
+          </td>
+        </tr>`).join('')}` : '';
+
     return `
     <div class="turma-cal-section">
       <div class="turma-cal-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display==='none'?'block':'none'">
         <span class="turma-cal-name">🏫 ${turma}</span>
-        <span class="turma-cal-count">${provas.length} provas</span>
+        <span class="turma-cal-count">${provas.length} provas${naoAlocadas.length ? ` · <span style="color:var(--brand-accent)">${naoAlocadas.length} pendente(s)</span>` : ''}</span>
       </div>
       <div class="turma-cal-body">
         <table class="data-table">
           <thead><tr><th>Data</th><th>Dia</th><th>Disciplina</th><th>Professor</th><th>Tipo</th><th>Observação</th></tr></thead>
           <tbody>
-            ${provas.map((p,i) => `
-              <tr ${p.manual ? 'style="background:rgba(245,166,35,.06)"' : ''}>
-                <td>${formatDate(p.data)}</td>
-                <td>${DIAS_SEMANA_FULL[getDayOfWeek(p.data)]}</td>
-                <td><strong>${p.disciplina}</strong>${p.manual ? ' <span class="badge badge-fi" style="font-size:9px">Manual</span>' : ''}</td>
-                <td>${p.professor}</td>
-                <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
-                <td><small style="color:var(--text-muted)">${p.observacao || '—'}</small></td>
-              </tr>`).join('')}
+            ${provasHTML}
+            ${naoAlocadasHTML}
           </tbody>
         </table>
       </div>
