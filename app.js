@@ -1372,7 +1372,7 @@ function mostrarAgendaProfessor(profName) {
   tbody.innerHTML = html;
 
   // Abre o modal
-  document.getElementById('modal-agenda-prof').classList.add('active');
+  abrirModal('modal-agenda-prof');
 }
 
 
