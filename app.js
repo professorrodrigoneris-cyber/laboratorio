@@ -1151,44 +1151,43 @@ function algoritmoGeracao(inicio, fim) {
         if (slotsUsados >= maxTurma) break;
 
         const prof = group[0].professor;
-
-        // Se o grupo não couber junto hoje (a menos que a turma não tenha provas no dia)
-        if (slotsUsados > 0 && slotsUsados + group.length > maxTurma) {
-          continue;
-        }
-
         const diasProf = STATE.criterios.professores[prof]?.dias || [1,2,3,4,5];
-        
+
         // 1️⃣ Professor disponível no dia da semana?
         if (!diasProf.includes(dow)) continue;
 
         // 4️⃣ CONFLITO GLOBAL: professor já aplicou em outra turma hoje?
-        // Permitimos que aplique várias provas na MESMA turma (aramazenamos o nome da turma)
+        // Permitimos que aplique várias provas na MESMA turma (armazenamos o nome da turma)
         const profKeyGlobal = prof + '|' + data;
         if (professorDiaGlobal[profKeyGlobal] && professorDiaGlobal[profKeyGlobal] !== turma) continue;
 
-        let podeAlocar = true;
-        for (const disc of group) {
-           const pref = STATE.criterios.preferencias[String(disc.id)] || {};
-           const diaFixo = pref.diaFixo ? parseInt(pref.diaFixo) : null;
-           
-           // 2️⃣ Dia fixo da disciplina?
-           if (diaFixo !== null && dow !== diaFixo) { podeAlocar = false; break; }
+        // Filtra apenas as disciplinas do grupo que passam nas validações individuais
+        const elegíveis = group.filter(disc => {
+          const pref = STATE.criterios.preferencias[String(disc.id)] || {};
+          const diaFixo = pref.diaFixo ? parseInt(pref.diaFixo) : null;
 
-           // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
-           const keyCont = turma + '|' + disc.disciplina;
-           if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) { podeAlocar = false; break; }
-        }
+          // 2️⃣ Dia fixo da disciplina?
+          if (diaFixo !== null && dow !== diaFixo) return false;
 
-        if (!podeAlocar) continue;
+          // 3️⃣ Intervalo mínimo desde última aplicação desta disc nesta turma
+          const keyCont = turma + '|' + disc.disciplina;
+          if (ultimaDiaMap[keyCont] && daysBetween(ultimaDiaMap[keyCont], data) < intervalo) return false;
 
-        // ✅ ALOCA TODAS DO GRUPO!
-        for (const disc of group) {
-          if (slotsUsados >= maxTurma && slotsUsados > 0 && group.length === 1) break; // sanity check fallback
-          
+          return true;
+        });
+
+        if (!elegíveis.length) continue;
+
+        // Quantos slots restam hoje para esta turma?
+        const slotsRestantes = maxTurma - slotsUsados;
+        // Pega no máximo o que cabe nos slots do dia
+        const chunk = elegíveis.slice(0, slotsRestantes);
+
+        // ✅ ALOCA O CHUNK (respeitando o limite de provas/dia)
+        for (const disc of chunk) {
           if (!resultado[data]) resultado[data] = [];
           const pref = STATE.criterios.preferencias[String(disc.id)] || {};
-          
+
           resultado[data].push({
             turma,
             disciplina: disc.disciplina,
