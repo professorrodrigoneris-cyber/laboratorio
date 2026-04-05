@@ -1382,6 +1382,23 @@ function setNaoDataManual(idx, data) {
     // Ativa o botão de inserir
     const btn = document.querySelector(`#nao-row-${idx} .btn-secondary`);
     if (btn) btn.disabled = !data;
+
+    // Auto-preenche observação: se já tem provas neste dia para esta turma,
+    // o 1º professor daquele dia vai aplicar esta prova também
+    if (data && STATE.calendario) {
+      const item = STATE.naoCouberem[idx];
+      const provasNoDia = (STATE.calendario[data] || []).filter(p => p.turma === item.turma);
+      const obsInput = document.getElementById(`nao-obs-${idx}`);
+
+      if (provasNoDia.length > 0 && provasNoDia[0].professor !== item.professor) {
+        const aplicador = provasNoDia[0].professor;
+        const sugestao = `${aplicador} - Aplica`;
+        if (obsInput && !item.observacao) {
+          obsInput.value = sugestao;
+          STATE.naoCouberem[idx].observacao = sugestao;
+        }
+      }
+    }
   }
 }
 
@@ -1393,6 +1410,19 @@ function inserirNaoAlocado(idx) {
   const item = STATE.naoCouberem[idx];
   if (!item || !item.dataManual) {
     toast('Selecione uma data para inserir!', 'warning'); return;
+  }
+
+  // Verifica conflito de professor (professor em outra turma no mesmo dia)
+  const provasNoDia = STATE.calendario[item.dataManual] || [];
+  const conflitoOutraTurma = provasNoDia.find(p =>
+    p.professor === item.professor && p.turma !== item.turma
+  );
+
+  if (conflitoOutraTurma && !item.observacao) {
+    toast(`⚠️ ${item.professor} já aplica prova em "${conflitoOutraTurma.turma}" neste dia. Preencha a observação com o professor que vai aplicar.`, 'warning');
+    const obsInput = document.getElementById(`nao-obs-${idx}`);
+    if (obsInput) { obsInput.focus(); obsInput.style.borderColor = 'var(--brand-accent)'; }
+    return;
   }
 
   if (!STATE.calendario[item.dataManual]) STATE.calendario[item.dataManual] = [];
@@ -1587,7 +1617,12 @@ function renderVisualizacaoLista() {
         <td style="text-align:center"><span style="font-size:11px;color:var(--text-muted);font-weight:500">${numProva}</span></td>
         <td>${p.professor}</td>
         <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
-        <td>${arrowsHTML}</td>
+        <td>
+          <div style="display:flex;gap:2px;align-items:center">
+            ${arrowsHTML}
+            <button class="btn-move" onclick="removerProvaAlocada('${turmaEsc}', '${p.data}', ${i})" title="Remover prova" style="color:var(--brand-accent);border-color:rgba(255,107,107,.3)">✕</button>
+          </div>
+        </td>
         <td><small style="color:var(--text-muted)">${p.observacao || '—'}</small></td>
       </tr>`;
     }).join('');
@@ -1696,6 +1731,55 @@ function moverProva(turma, idx, direcao) {
   toast(`Provas "${provaA.disciplina}" e "${provaB.disciplina}" trocadas!`, 'info');
 }
 
+// =============================================
+// REMOVER PROVA ALOCADA (volta para pendentes)
+// =============================================
+function removerProvaAlocada(turma, data, idxNoArray) {
+  if (!STATE.calendario) return;
+
+  // Coleta provas da turma ordenadas por data
+  const provasDaTurma = [];
+  Object.entries(STATE.calendario).forEach(([d, provas]) => {
+    provas.forEach((p, pi) => {
+      if (p.turma === turma) {
+        provasDaTurma.push({ data: d, provaIdx: pi, prova: p });
+      }
+    });
+  });
+  provasDaTurma.sort((a, b) => a.data.localeCompare(b.data));
+
+  const item = provasDaTurma[idxNoArray];
+  if (!item) return;
+
+  const prova = item.prova;
+
+  abrirConfirm('🗑️', 'Remover Prova',
+    `Deseja remover "<strong>${prova.disciplina}</strong>" (${turma}) do dia ${formatDate(item.data)}?<br><small>A disciplina será movida para "Disciplinas Fora do Período".</small>`,
+    () => {
+      // Remove do calendário
+      STATE.calendario[item.data].splice(item.provaIdx, 1);
+      if (STATE.calendario[item.data].length === 0) {
+        delete STATE.calendario[item.data];
+      }
+
+      // Adiciona à lista de pendentes
+      if (!STATE.naoCouberem) STATE.naoCouberem = [];
+      STATE.naoCouberem.push({
+        turma:      prova.turma,
+        disciplina: prova.disciplina,
+        professor:  prova.professor,
+        eletiva:    prova.eletiva,
+        segmento:   prova.segmento,
+        discId:     prova.discId,
+        motivo:     'Removida manualmente',
+      });
+
+      renderCalendario();
+      renderNaoCouberem();
+      toast(`"${prova.disciplina}" removida e movida para pendentes.`, 'info');
+    }
+  );
+}
 
 /* ---- VISÃO PROFESSOR ---- */
 function renderVisualizacaoProfessor() {
