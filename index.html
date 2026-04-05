@@ -42,6 +42,11 @@
     </button>
   </nav>
   <div class="sidebar-footer">
+    <div class="sidebar-disc-count" id="sidebar-disc-count" style="font-size:11px;color:var(--text-muted);margin-bottom:10px;padding:0 4px"></div>
+    <div class="theme-toggle" style="display:flex;gap:4px;margin-bottom:10px">
+      <button class="seg-btn active" id="theme-dark" onclick="setTheme('dark')" style="flex:1;font-size:11px;padding:5px 8px">🌙 Dark</button>
+      <button class="seg-btn" id="theme-system" onclick="setTheme('system')" style="flex:1;font-size:11px;padding:5px 8px">💻 Sistema</button>
+    </div>
     <div class="data-status" id="data-status">
       <span class="status-dot"></span>
       <span id="status-text">Carregando dados...</span>

@@ -245,6 +245,7 @@ function finalizarCarregamento() {
 
   renderAll();
   updateStatus();
+  atualizarContadorSidebar();
 }
 
 function updateStatus() {
@@ -1789,8 +1790,21 @@ function renderVisualizacaoProfessor() {
   const porProf = {};
   Object.entries(STATE.calendario).forEach(([data, provas]) => {
     provas.forEach(p => {
+      // Prova própria do professor
       if (!porProf[p.professor]) porProf[p.professor] = [];
-      porProf[p.professor].push({ data, ...p });
+      porProf[p.professor].push({ data, ...p, _tipo: 'propria' });
+
+      // Se a observação indica que outro professor aplica (ex: "Jordana - Aplica")
+      if (p.observacao) {
+        const match = p.observacao.match(/^(.+?)\s*[-–]\s*[Aa]plica/);
+        if (match) {
+          const aplicador = match[1].trim();
+          if (aplicador !== p.professor) {
+            if (!porProf[aplicador]) porProf[aplicador] = [];
+            porProf[aplicador].push({ data, ...p, _tipo: 'aplica' });
+          }
+        }
+      }
     });
   });
 
@@ -1802,18 +1816,22 @@ function renderVisualizacaoProfessor() {
 
   container.innerHTML = profs.map(prof => {
     const provas = porProf[prof].sort((a,b) => a.data.localeCompare(b.data));
+    const proprias = provas.filter(p => p._tipo === 'propria').length;
+    const aplicacoes = provas.filter(p => p._tipo === 'aplica').length;
+    const resumo = `${proprias} própria(s)${aplicacoes ? ` · ${aplicacoes} aplicação(ões)` : ''}`;
     return `
     <div class="prof-cal-block">
-      <div class="prof-cal-header">👩‍🏫 ${prof} — ${provas.length} aplicações</div>
+      <div class="prof-cal-header">👩‍🏫 ${prof} — ${resumo}</div>
       <table class="data-table">
-        <thead><tr><th>Data</th><th>Dia</th><th>Turma</th><th>Disciplina</th></tr></thead>
+        <thead><tr><th>Data</th><th>Dia</th><th>Turma</th><th>Disciplina</th><th>Tipo</th></tr></thead>
         <tbody>
           ${provas.map(p => `
-            <tr>
+            <tr ${p._tipo === 'aplica' ? 'style="background:rgba(245,166,35,.06)"' : ''}>
               <td>${formatDate(p.data)}</td>
               <td>${DIAS_SEMANA_FULL[getDayOfWeek(p.data)]}</td>
               <td>${p.turma}</td>
-              <td>${p.disciplina}</td>
+              <td>${p.disciplina}${p._tipo === 'aplica' ? ` <span class="badge badge-fi" style="font-size:9px">Aplica p/ ${p.professor}</span>` : ''}</td>
+              <td>${p._tipo === 'propria' ? '<span class="badge badge-regular">Própria</span>' : '<span class="badge badge-fi">Aplica</span>'}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -2040,3 +2058,47 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
   }
 });
+
+// =============================================
+// TEMA (Dark / System)
+// =============================================
+function setTheme(mode) {
+  localStorage.setItem('tema', mode);
+
+  document.getElementById('theme-dark').classList.toggle('active', mode === 'dark');
+  document.getElementById('theme-system').classList.toggle('active', mode === 'system');
+
+  if (mode === 'dark') {
+    document.documentElement.classList.remove('light');
+    document.documentElement.classList.add('dark');
+  } else {
+    // system: segue preferência do SO
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('light', !prefersDark);
+    document.documentElement.classList.toggle('dark', prefersDark);
+  }
+}
+
+// Listener para mudança de tema do SO
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (localStorage.getItem('tema') === 'system') setTheme('system');
+});
+
+// Inicializa tema
+(function initTheme() {
+  const saved = localStorage.getItem('tema') || 'dark';
+  setTheme(saved);
+})();
+
+// =============================================
+// SIDEBAR: total de disciplinas
+// =============================================
+function atualizarContadorSidebar() {
+  const el = document.getElementById('sidebar-disc-count');
+  if (el && STATE.disciplinas) {
+    const total = STATE.disciplinas.length;
+    const turmas = new Set(STATE.disciplinas.map(d => d.turma)).size;
+    const profs = new Set(STATE.disciplinas.map(d => d.professor)).size;
+    el.innerHTML = `📊 ${total} disciplinas · ${turmas} turmas · ${profs} professores`;
+  }
+}
