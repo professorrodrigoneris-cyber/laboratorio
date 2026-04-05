@@ -986,7 +986,7 @@ function renderTurmasSummary() {
 // =============================================
 // TAB: CALENDÁRIO – GERAÇÃO
 // =============================================
-function gerarCalendario() {
+function gerarCalendario(strict = false) {
   const inicio = document.getElementById('cal-data-inicio').value;
   const fim    = document.getElementById('cal-data-fim').value;
 
@@ -1007,7 +1007,7 @@ function gerarCalendario() {
 
   setTimeout(() => {
     try {
-      const { resultado, naoCouberem } = algoritmoGeracao(inicio, fim);
+      const { resultado, naoCouberem } = algoritmoGeracao(inicio, fim, strict);
       STATE.calendario    = resultado;
       STATE.naoCouberem   = naoCouberem;
       renderCalendario();
@@ -1031,7 +1031,7 @@ function gerarCalendario() {
 // =============================================
 // ALGORITMO DE GERAÇÃO (v3 – dia a dia, turma a turma)
 // =============================================
-function algoritmoGeracao(inicio, fim) {
+function algoritmoGeracao(inicio, fim, strict = false) {
   const cfg       = STATE.criterios.config;
   const maxDia    = cfg.maxProvasDia || 2;
   const intervalo = cfg.intervaloMinimo || 1;
@@ -1228,13 +1228,13 @@ function algoritmoGeracao(inicio, fim) {
       turmaSlotsDia[turma + '|' + data] = allocated;
     }
 
-    // ========== PASS 1.5: turmas que ficaram com 0 — relaxa conflito de professor ==========
+    // ========== PASS 1.5: turmas que ficaram com 0 — relaxa conflito se não for strict ==========
     for (const turma of turmasOrdem) {
       if ((turmaSlotsDia[turma + '|' + data] || 0) > 0) continue;
       const remaining = (pendentePorTurma[turma] || []).filter(x => !x._alocada).length;
       if (remaining === 0) continue;
 
-      const allocated = alocarTurmaNoDay(turma, data, dow, 1, false);
+      const allocated = alocarTurmaNoDay(turma, data, dow, 1, strict ? true : false);
       turmaSlotsDia[turma + '|' + data] = allocated;
     }
 
@@ -1504,9 +1504,11 @@ function verificarConflitosProcesso() {
         <ul style="padding-left:16px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px;">
           ${conflitos.map(c => `<li>${c}</li>`).join('')}
         </ul>
-        <p style="color:var(--text-muted);">Realoque os professores alterando as datas ou preencha a Observação (ex: "Nome do Prof - Aplica").</p>
+        <p style="color:var(--text-muted);">Clique em <strong>Confirmar</strong> para gerar um novo calendário forçando regra Estrita (SEM CONFLITOS).</p>
       </div>`,
-      () => {}
+      () => {
+        gerarCalendario(true);
+      }
     );
   } else {
     toast('✅ Nenhum conflito de horário encontrado neste calendário!', 'success');
