@@ -1554,11 +1554,31 @@ function renderVisualizacaoLista() {
     const totalCount = provas.length + naoAlocadas.length;
     const turmaEsc = turma.replace(/'/g, "\\'");
 
+    // Calcula o nº da prova no dia (1ª, 2ª por data)
+    const dayCounters = {};
+    const provasComNum = provas.map((p, i) => {
+      dayCounters[p.data] = (dayCounters[p.data] || 0) + 1;
+      return { ...p, _numDia: dayCounters[p.data], _idx: i };
+    });
+
     // Linhas das provas alocadas
-    const provasHTML = provas.map((p,i) => {
-      const numProva = `${i+1}ª Prova`;
-      const isFirst = i === 0;
-      const isLast = i === provas.length - 1;
+    const provasHTML = provasComNum.map((p) => {
+      const i = p._idx;
+      const numProva = `${p._numDia}ª Prova`;
+
+      // Setas: só mostra se o vizinho tem o MESMO professor
+      const prevProf = i > 0 ? provas[i-1].professor : null;
+      const nextProf = i < provas.length - 1 ? provas[i+1].professor : null;
+      const canMoveUp = prevProf === p.professor;
+      const canMoveDown = nextProf === p.professor;
+      const showArrows = canMoveUp || canMoveDown;
+
+      const arrowsHTML = showArrows ? `
+          <div style="display:flex;gap:2px">
+            <button class="btn-move" onclick="moverProva('${turmaEsc}', ${i}, -1)" title="Mover para cima" ${!canMoveUp?'disabled':''}>▲</button>
+            <button class="btn-move" onclick="moverProva('${turmaEsc}', ${i}, 1)" title="Mover para baixo" ${!canMoveDown?'disabled':''}>▼</button>
+          </div>` : '';
+
       return `
       <tr ${p.manual ? 'style="background:rgba(245,166,35,.06)"' : ''}>
         <td>${formatDate(p.data)}</td>
@@ -1567,25 +1587,26 @@ function renderVisualizacaoLista() {
         <td style="text-align:center"><span style="font-size:11px;color:var(--text-muted);font-weight:500">${numProva}</span></td>
         <td>${p.professor}</td>
         <td>${p.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
-        <td>
-          <div style="display:flex;gap:2px">
-            <button class="btn-move" onclick="moverProva('${turmaEsc}', ${i}, -1)" title="Mover para cima" ${isFirst?'disabled':''}">▲</button>
-            <button class="btn-move" onclick="moverProva('${turmaEsc}', ${i}, 1)" title="Mover para baixo" ${isLast?'disabled':''}>▼</button>
-          </div>
-        </td>
+        <td>${arrowsHTML}</td>
         <td><small style="color:var(--text-muted)">${p.observacao || '—'}</small></td>
       </tr>`;
     }).join('');
 
-    // Linhas das disciplinas não alocadas
-    const nextProvaNum = provas.length + 1;
+    // Para disciplinas não alocadas, continua a sequência do dia correspondente
     const naoAlocadasHTML = naoAlocadas.length ? `
       <tr style="background:rgba(245,166,35,.08)">
         <td colspan="8" style="padding:10px 14px;border-top:2px solid rgba(245,166,35,.3)">
           <span style="font-weight:600;color:var(--brand-accent)">⚠️ Disciplinas Fora do Período (${naoAlocadas.length})</span>
         </td>
       </tr>
-      ${naoAlocadas.map((item, ni) => `
+      ${naoAlocadas.map((item, ni) => {
+        // Se tem data manual, calcula a posição naquele dia
+        let numLabel = '';
+        if (item.dataManual) {
+          const countNoDia = (dayCounters[item.dataManual] || 0) + ni + 1;
+          numLabel = `${countNoDia}ª Prova`;
+        }
+        return `
         <tr class="nao-couberam-row" id="nao-row-${item._idx}" style="background:rgba(245,166,35,.04)">
           <td colspan="2" style="text-align:center">
             <input type="date" class="form-input small" style="width:130px"
@@ -1594,7 +1615,7 @@ function renderVisualizacaoLista() {
               onchange="setNaoDataManual(${item._idx}, this.value)" />
           </td>
           <td><strong style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="mostrarAgendaProfessor('${item.professor}')" title="Ver agenda de ${item.professor}">${item.disciplina}</strong></td>
-          <td style="text-align:center"><span style="font-size:11px;color:var(--brand-accent);font-weight:500">${nextProvaNum + ni}ª Prova</span></td>
+          <td style="text-align:center"><span style="font-size:11px;color:var(--brand-accent);font-weight:500">${numLabel}</span></td>
           <td>${item.professor}</td>
           <td>${item.eletiva==='Sim'?'<span class="badge badge-eletiva">Eletiva</span>':'<span class="badge badge-regular">Regular</span>'}</td>
           <td></td>
@@ -1617,7 +1638,8 @@ function renderVisualizacaoLista() {
               </button>
             </div>
           </td>
-        </tr>`).join('')}` : '';
+        </tr>`;
+      }).join('')}` : '';
 
     return `
     <div class="turma-cal-section">
