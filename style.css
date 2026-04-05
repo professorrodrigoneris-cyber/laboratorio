@@ -587,7 +587,6 @@ td .form-input, td .form-select { padding: 5px 8px; font-size: 12px; margin: 0; 
    CALENDÁRIO
    ============================================= */
 .cal-top-panel { margin-bottom: 20px; }
-.cal-config-card {}
 .cal-form-row {
   display: grid;
   grid-template-columns: auto auto 1fr;

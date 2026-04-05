@@ -1961,6 +1961,29 @@ function exportarCalendarioCSV() {
   toast('CSV exportado!', 'success');
 }
 
+function exportarRelatorioCompleto() {
+  if (!STATE.calendario) {
+    toast('Gere um calendário primeiro!', 'warning');
+    return;
+  }
+
+  // Prepara o corpo para o modo de impressão de relatório completo
+  document.body.classList.add('printing-report');
+  
+  // O CSS (@media print) cuidará da visibilidade e da ordem:
+  // 1. Visão por Turma (order 1)
+  // 2. Visão Calendário (order 2)
+  // 3. Visão por Professor (order 3)
+  
+  window.print();
+  
+  // Remove a classe após a janela de impressão fechar (ou ser cancelada)
+  // Usamos um pequeno timeout para evitar piscar antes da caixa abrir em alguns browsers
+  setTimeout(() => {
+    document.body.classList.remove('printing-report');
+  }, 500);
+}
+
 function imprimirCalendario() {
   window.print();
 }
