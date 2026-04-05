@@ -1962,26 +1962,78 @@ function exportarCalendarioCSV() {
 }
 
 function exportarRelatorioCompleto() {
+  document.body.classList.add('printing-report');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-report'), 500);
+}
+
+function exportarCalendarioWord() {
   if (!STATE.calendario) {
     toast('Gere um calendário primeiro!', 'warning');
     return;
   }
 
-  // Prepara o corpo para o modo de impressão de relatório completo
-  document.body.classList.add('printing-report');
+  // Coleta o estilo CSS relevante para injetar no Word
+  const cssStyles = `
+    <style>
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #000; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+      th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 8px; text-align: left; font-weight: bold; }
+      td { border: 1px solid #ccc; padding: 8px; vertical-align: top; }
+      h1, h2 { color: #333; margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+      .badge { font-size: 8pt; padding: 2px 5px; border-radius: 3px; background: #eee; border: 1px solid #ccc; }
+      .turma-cal-header { background: #eee; font-weight: bold; padding: 10px; }
+      /* Quebra de página no Word */
+      .page-break { page-break-before: always; mso-special-character: page-break; }
+      .grid-day { background: #fafafa; border-bottom: 2px solid #ddd; padding: 15px; }
+    </style>
+  `;
+
+  // Prepara o conteúdo (Ordem: 1. Lista, 2. Calendário/Grid, 3. Professor)
+  const headerLista = "<h1>1. Visão por Turma</h1>";
+  const contentLista = document.getElementById('calendario-lista').innerHTML;
+
+  const headerGrid = "<div class='page-break'></div><h1>2. Calendário Completo</h1>";
+  const contentGrid = document.getElementById('calendario-grid').innerHTML;
+
+  const headerProfessor = "<div class='page-break'></div><h1>3. Visão do Professor</h1>";
+  const contentProfessor = document.getElementById('calendario-professor').innerHTML;
+
+  const fullHtml = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset='utf-8'>
+      <title>Calendário de Provas</title>
+      ${cssStyles}
+    </head>
+    <body>
+      ${headerLista}
+      ${contentLista}
+      ${headerGrid}
+      ${contentGrid}
+      ${headerProfessor}
+      ${contentProfessor}
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', fullHtml], {
+    type: 'application/msword'
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `calendario_provas_${new Date().toLocaleDateString('pt-BR')}.doc`;
+  document.body.appendChild(a);
+  a.click();
   
-  // O CSS (@media print) cuidará da visibilidade e da ordem:
-  // 1. Visão por Turma (order 1)
-  // 2. Visão Calendário (order 2)
-  // 3. Visão por Professor (order 3)
-  
-  window.print();
-  
-  // Remove a classe após a janela de impressão fechar (ou ser cancelada)
-  // Usamos um pequeno timeout para evitar piscar antes da caixa abrir em alguns browsers
   setTimeout(() => {
-    document.body.classList.remove('printing-report');
-  }, 500);
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 0);
+
+  toast('📄 Arquivo Word gerado!', 'success');
 }
 
 function imprimirCalendario() {
