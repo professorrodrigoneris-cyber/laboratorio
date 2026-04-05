@@ -1976,27 +1976,33 @@ function exportarCalendarioWord() {
   // Coleta o estilo CSS relevante para injetar no Word
   const cssStyles = `
     <style>
-      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #000; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-      th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 8px; text-align: left; font-weight: bold; }
-      td { border: 1px solid #ccc; padding: 8px; vertical-align: top; }
-      h1, h2 { color: #333; margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-      .badge { font-size: 8pt; padding: 2px 5px; border-radius: 3px; background: #eee; border: 1px solid #ccc; }
-      .turma-cal-header { background: #eee; font-weight: bold; padding: 10px; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #000; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 25px; table-layout: auto; }
+      th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 6px; text-align: left; font-weight: bold; font-size: 9pt; }
+      td { border: 1px solid #ccc; padding: 6px; vertical-align: top; font-size: 9pt; }
+      h1 { color: #000; font-size: 16pt; margin-top: 20px; border-bottom: 2px solid #333; padding-bottom: 5px; }
+      h2 { color: #444; font-size: 13pt; margin-top: 15px; background: #eee; padding: 5px; }
+      .badge { font-size: 8pt; padding: 1px 3px; border: 1px solid #ccc; }
+      
+      /* Oculta a coluna ORDEM (7ª coluna na Visão por Turma) */
+      table tr th:nth-child(7), 
+      table tr td:nth-child(7) { 
+        display: none !important; 
+      }
+      
       /* Quebra de página no Word */
       .page-break { page-break-before: always; mso-special-character: page-break; }
-      .grid-day { background: #fafafa; border-bottom: 2px solid #ddd; padding: 15px; }
+      
+      /* Ajuste para não exportar botões e elementos de interface que possam estar no HTML */
+      button, .btn-move, .btn, input, select { display: none !important; }
     </style>
   `;
 
-  // Prepara o conteúdo (Ordem: 1. Lista, 2. Calendário/Grid, 3. Professor)
-  const headerLista = "<h1>1. Visão por Turma</h1>";
+  // Prepara o conteúdo (Somente Turma e Professor)
+  const headerLista = "<h1>Visão por Turma</h1>";
   const contentLista = document.getElementById('calendario-lista').innerHTML;
 
-  const headerGrid = "<div class='page-break'></div><h1>2. Calendário Completo</h1>";
-  const contentGrid = document.getElementById('calendario-grid').innerHTML;
-
-  const headerProfessor = "<div class='page-break'></div><h1>3. Visão do Professor</h1>";
+  const headerProfessor = "<div class='page-break'></div><h1>Visão do Professor</h1>";
   const contentProfessor = document.getElementById('calendario-professor').innerHTML;
 
   const fullHtml = `
@@ -2009,8 +2015,6 @@ function exportarCalendarioWord() {
     <body>
       ${headerLista}
       ${contentLista}
-      ${headerGrid}
-      ${contentGrid}
       ${headerProfessor}
       ${contentProfessor}
     </body>
@@ -2024,7 +2028,7 @@ function exportarCalendarioWord() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `calendario_provas_${new Date().toLocaleDateString('pt-BR')}.doc`;
+  a.download = `calendario_provas_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.doc`;
   document.body.appendChild(a);
   a.click();
   
@@ -2033,7 +2037,7 @@ function exportarCalendarioWord() {
     window.URL.revokeObjectURL(url);
   }, 0);
 
-  toast('📄 Arquivo Word gerado!', 'success');
+  toast('📄 Word gerado (Turmas e Professores)!', 'success');
 }
 
 function imprimirCalendario() {
