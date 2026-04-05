@@ -979,3 +979,29 @@ td .form-input, td .form-select { padding: 5px 8px; font-size: 12px; margin: 0; 
   z-index: 9999;
   box-shadow: var(--shadow-sm);
 }
+
+/* =============================================
+   MOVE BUTTONS (reorder exams)
+   ============================================= */
+.btn-move {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 24px; height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+  padding: 0;
+  font-family: inherit;
+}
+.btn-move:hover:not(:disabled) {
+  background: var(--brand-primary);
+  color: #fff;
+  border-color: var(--brand-primary);
+}
+.btn-move:disabled {
+  opacity: .25;
+  cursor: not-allowed;
+}
