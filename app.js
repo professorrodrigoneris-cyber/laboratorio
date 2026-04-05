@@ -1976,31 +1976,48 @@ function exportarCalendarioWord() {
   // Coleta o estilo CSS relevante para injetar no Word
   const cssStyles = `
     <style>
-      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #000; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 25px; table-layout: auto; }
-      th { background-color: #f2f2f2; border: 1px solid #ccc; padding: 6px; text-align: left; font-weight: bold; font-size: 9pt; }
-      td { border: 1px solid #ccc; padding: 6px; vertical-align: top; font-size: 9pt; }
-      h1 { color: #000; font-size: 16pt; margin-top: 20px; border-bottom: 2px solid #333; padding-bottom: 5px; }
-      h2 { color: #444; font-size: 13pt; margin-top: 15px; background: #eee; padding: 5px; }
-      .badge { font-size: 8pt; padding: 1px 3px; border: 1px solid #ccc; }
-      
-      /* Oculta a coluna ORDEM (7ª coluna na Visão por Turma) */
-      table tr th:nth-child(7), 
-      table tr td:nth-child(7) { 
-        display: none !important; 
-      }
-      
-      /* Quebra de página no Word */
+      @page { margin: 1.5cm 1.5cm; mso-page-orientation: landscape; size: A4 landscape; }
+      body { font-family: 'Calibri', 'Segoe UI', Arial; font-size: 10pt; color: #000; }
+      table { border-collapse: collapse; width: 100%; border: 1px solid #333; margin-bottom: 20px; table-layout: auto; }
+      th { background-color: #f2f2f2; border: 1px solid #666; padding: 6px; text-align: left; font-weight: bold; font-size: 9pt; }
+      td { border: 1px solid #666; padding: 6px; vertical-align: middle; font-size: 9pt; }
+      h1 { color: #000; font-size: 16pt; margin: 10px 0; border-bottom: 2px solid #555; }
+      h2 { color: #333; font-size: 12pt; margin-top: 15px; padding: 5px; background: #f0f0f0; border: 1px solid #ddd; }
+      .turma-cal-header { display: block; width: 100%; font-weight: bold; font-size: 11pt; padding: 5px 0; }
       .page-break { page-break-before: always; mso-special-character: page-break; }
       
-      /* Ajuste para não exportar botões e elementos de interface que possam estar no HTML */
-      button, .btn-move, .btn, input, select { display: none !important; }
+      /* Ajuste para remover botões e elementos de sistema se sobrarem */
+      button, .btn-move, .btn, input, select { display: none !important; mso-hide: all; }
     </style>
   `;
 
+  // Função interna para limpar a coluna ORDEM (7ª coluna, índice 6)
+  function limparColunaInfo(html) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Remove especificamente a coluna "Ordem" e qualquer botão
+    const rows = temp.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      if (cells.length >= 7) {
+        // Verifica se é a coluna Ordem (pelo texto ou índice)
+        // No caso da Visão por Turma, Ordem é o índice 6
+        if (cells.length === 8) {
+           cells[6].remove(); // Remove coluna Ordem
+        }
+      }
+    });
+
+    // Remove botões e outros elementos residuais
+    temp.querySelectorAll('button, .btn-move, input').forEach(el => el.remove());
+    
+    return temp.innerHTML;
+  }
+
   // Prepara o conteúdo (Somente Turma e Professor)
   const headerLista = "<h1>Visão por Turma</h1>";
-  const contentLista = document.getElementById('calendario-lista').innerHTML;
+  const contentLista = limparColunaInfo(document.getElementById('calendario-lista').innerHTML);
 
   const headerProfessor = "<div class='page-break'></div><h1>Visão do Professor</h1>";
   const contentProfessor = document.getElementById('calendario-professor').innerHTML;
@@ -2037,7 +2054,7 @@ function exportarCalendarioWord() {
     window.URL.revokeObjectURL(url);
   }, 0);
 
-  toast('📄 Word gerado (Turmas e Professores)!', 'success');
+  toast('📄 Word gerado e limpo!', 'success');
 }
 
 function imprimirCalendario() {
