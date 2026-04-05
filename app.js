@@ -1457,6 +1457,61 @@ function descartarNaoAlocado(idx) {
     });
 }
 
+// =============================================
+// VERIFICAR CONFLITOS DE PROFESSOR
+// =============================================
+function verificarConflitosProcesso() {
+  if (!STATE.calendario) {
+    toast('Gere um calendário primeiro!', 'warning');
+    return;
+  }
+
+  const conflitos = [];
+
+  Object.entries(STATE.calendario).forEach(([data, provas]) => {
+    const aplicadoresDia = {}; // aplicador -> Set(turmas)
+
+    provas.forEach(p => {
+      let aplicador = p.professor;
+
+      // Verifica se a observação delega a aplicação (ex: "Jordana - Aplica")
+      if (p.observacao) {
+        const match = p.observacao.match(/^(.+?)\s*[-–]\s*[Aa]plica/);
+        if (match) {
+          aplicador = match[1].trim();
+        }
+      }
+
+      if (!aplicadoresDia[aplicador]) {
+        aplicadoresDia[aplicador] = new Set();
+      }
+      aplicadoresDia[aplicador].add(p.turma);
+    });
+
+    // Se o professor aplica em mais de 1 turma diferente no mesmo dia, é conflito
+    Object.entries(aplicadoresDia).forEach(([aplicador, turmas]) => {
+      if (turmas.size > 1) {
+        const turmasStr = Array.from(turmas).join(', ');
+        conflitos.push(`Data: <strong>${formatDate(data)}</strong> - <strong>${aplicador}</strong> (Turmas: ${turmasStr})`);
+      }
+    });
+  });
+
+  if (conflitos.length > 0) {
+    abrirConfirm('⚠️', 'Conflitos Identificados',
+      `<div style="text-align:left;max-height:50vh;overflow-y:auto;font-size:12px;color:var(--text-primary);">
+        <p style="margin-bottom:12px;font-weight:600;color:var(--brand-accent);">Foram encontrados os seguintes conflitos de horário:</p>
+        <ul style="padding-left:16px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px;">
+          ${conflitos.map(c => `<li>${c}</li>`).join('')}
+        </ul>
+        <p style="color:var(--text-muted);">Realoque os professores alterando as datas ou preencha a Observação (ex: "Nome do Prof - Aplica").</p>
+      </div>`,
+      () => {}
+    );
+  } else {
+    toast('✅ Nenhum conflito de horário encontrado neste calendário!', 'success');
+  }
+}
 
 
 // =============================================
